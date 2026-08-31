@@ -28,27 +28,89 @@ const TARGET_SHAPES = {
   },
 };
 
-/** Exact semver only: no ranges, no dist-tags, no partial versions. */
-const EXACT_VERSION = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
+const VERSION_SHAPE = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
 /**
- * An ordinary npm package name, scoped or not.
+ * One immutable release, as npm would resolve it.
  *
- * This is a security control, not tidiness. `npm install` also accepts git URLs,
- * tarball URLs and filesystem paths, any of which would install code that no
- * pinned version describes — defeating the point of pinning. Only a registry
- * name is allowed through.
+ * A regex alone is not enough, and the gap is not academic. npm classifies a
+ * spec as a *version* only when semver can parse it; anything else it treats as
+ * a **dist-tag** and asks the registry what that tag currently points at. Both
+ * `1.2.3-.` and `9007199254740993.0.0` look numeric, pass a shape check, and are
+ * legal tag names — so a publisher could repoint the executed code at will,
+ * which is the one thing pinning exists to prevent.
+ *
+ * So: no leading zeros (npm resolves `2026.08.18` to `2026.8.18`, and the
+ * recorded string would not name the code that ran), no empty prerelease
+ * identifiers, no build metadata (`1.2.3+build` also installs `1.2.3`), and
+ * numeric segments within what semver can represent.
  */
-const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+function isExactVersion(value) {
+  if (typeof value !== 'string') return false;
+  const match = VERSION_SHAPE.exec(value);
+  if (!match) return false;
 
-/** A bin *name*, never a path: it is joined onto an install directory. */
+  for (const segment of [match[1], match[2], match[3]]) {
+    if (segment.length > 1 && segment.startsWith('0')) return false;
+    if (!Number.isSafeInteger(Number(segment))) return false;
+  }
+
+  if (match[4] !== undefined) {
+    for (const identifier of match[4].split('.')) {
+      if (identifier === '') return false;
+      const numeric = /^\d+$/.test(identifier);
+      if (numeric && identifier.length > 1 && identifier.startsWith('0')) return false;
+    }
+  }
+  return true;
+}
+
+/** Hyphen last, so it cannot be read as a character range. */
+const PACKAGE_NAME = /^(@[a-z0-9~][a-z0-9._~-]*\/)?[a-z0-9~][a-z0-9._~-]*$/;
+
+/** Names npm reserves outright, whatever their shape. */
+const RESERVED_PACKAGE_NAMES = ['node_modules', 'favicon.ico'];
+
+/**
+ * An ordinary registry package name, scoped or not.
+ *
+ * A security control rather than tidiness: `npm install` also accepts git URLs,
+ * tarball URLs and filesystem paths, any of which installs code that no pinned
+ * version describes. Kept in step with npm's own rules — 214 characters, no
+ * leading dot or underscore, lowercase, and the two reserved names — so that a
+ * bad cohort entry is rejected here rather than by npm mid-sweep.
+ */
+function isPackageName(value) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 214) {
+    return false;
+  }
+  const bare = value.startsWith('@') ? value.slice(value.indexOf('/') + 1) : value;
+  if (bare.startsWith('.') || bare.startsWith('_')) return false;
+  if (RESERVED_PACKAGE_NAMES.includes(value.toLowerCase())) return false;
+  return PACKAGE_NAME.test(value);
+}
+
+/**
+ * A bin *name* as the package declares it — the key looked up in the manifest's
+ * `bin` map, not a path.
+ *
+ * It constrains what a reviewer can commit and keeps the name boring. It is NOT
+ * what keeps the resolved path inside the package: the value joined onto that
+ * path comes from the third-party manifest, so containment has to be checked
+ * where the join happens.
+ */
 const BIN_NAME = /^[A-Za-z0-9._-]+$/;
 
 /** Ids appear in committed JSON and as labels, so they stay boring. */
 const TARGET_ID = /^[a-z0-9][a-z0-9-]*$/;
 
 function isText(value) {
-  return typeof value === 'string' && value.length > 0;
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isBinName(value) {
+  // "." and ".." pass the character class and mean something else entirely.
+  return isText(value) && value !== '.' && value !== '..' && BIN_NAME.test(value);
 }
 
 /** Reject any key outside `allowed`. */
@@ -101,7 +163,13 @@ export function loadTargets(text, options = {}) {
       );
     }
 
-    const shape = TARGET_SHAPES[target.kind];
+    // Object.hasOwn, because TARGET_SHAPES["__proto__"] is Object.prototype:
+    // truthy, so a bare lookup passes this guard and then throws a TypeError
+    // from inside the validator instead of reporting a bad cohort file.
+    const shape =
+      typeof target.kind === 'string' && Object.hasOwn(TARGET_SHAPES, target.kind)
+        ? TARGET_SHAPES[target.kind]
+        : undefined;
     if (!shape) {
       throw new Error(
         `Target at index ${index} has unknown kind ${JSON.stringify(target.kind)}. Expected "npm" or "local".`,
@@ -136,17 +204,17 @@ export function loadTargets(text, options = {}) {
         throw new Error(`${named}: command must be a non-empty string.`);
       }
     } else {
-      if (!isText(target.package) || !PACKAGE_NAME.test(target.package)) {
+      if (!isPackageName(target.package)) {
         throw new Error(
           `${named}: package must be a plain npm package name, got ${JSON.stringify(target.package)}. Git URLs, tarball URLs and file paths are refused — they would install code no pinned version describes.`,
         );
       }
-      if (!isText(target.version) || !EXACT_VERSION.test(target.version)) {
+      if (!isExactVersion(target.version)) {
         throw new Error(
           `${named}: version must be an exact version like "1.2.3", got ${JSON.stringify(target.version)}. Ranges and dist-tags let an upstream release change the numbers and the executed code with no review.`,
         );
       }
-      if (!isText(target.bin) || !BIN_NAME.test(target.bin)) {
+      if (!isBinName(target.bin)) {
         throw new Error(
           `${named}: bin must be a bin name, not a path, got ${JSON.stringify(target.bin)}.`,
         );

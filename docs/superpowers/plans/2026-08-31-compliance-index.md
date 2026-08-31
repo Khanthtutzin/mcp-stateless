@@ -1270,8 +1270,26 @@ git commit -m "feat(index): scan a cohort into a verdict snapshot"
 - Consumes: `loadTargets`, `scanTargets`, `createProbe` from Tasks 3–4.
 - Produces:
   - `resolveNpmBin(installDir: string, pkg: string, binName: string): string` — absolute path to the bin's JS entry point.
-  - `installTarget(target: NpmTarget, dir: string, run?): void`
-  - CLI: `node scripts/scan-index.mjs [--targets <file>] [--out <file>] [--allow-local] [--timeout <ms>]`
+
+> **Amended after the Task 3 review.** `loadTargets` validating `bin` does **not**
+> make the resolved path safe, and an earlier draft of this plan implied it did.
+> `binName` is only a key looked up in the manifest; the value joined onto the
+> path comes from the **downloaded third-party package**, so a manifest declaring
+> `"bin": {"server-a": "../../../../evil.js"}` escapes the install directory with
+> nothing to stop it. Two requirements follow, both in `resolveNpmBin`:
+>
+> 1. **Containment.** After resolving, assert the path is inside
+>    `join(installDir, 'node_modules', pkg)` — compare `path.resolve`d values, and
+>    reject rather than probe if it is not.
+> 2. **String-form `bin`.** When a manifest sets `bin` to a string rather than a
+>    map, the declared `binName` is ignored entirely, so the reviewer-pinned name
+>    would never be checked against what runs. Require that the string form is
+>    only accepted when the package name's last segment equals `binName`.
+>
+> Both need a test with a fixture manifest, alongside the existing ones.
+
+- `installTarget(target: NpmTarget, dir: string, run?): void`
+- CLI: `node scripts/scan-index.mjs [--targets <file>] [--out <file>] [--allow-local] [--timeout <ms>]`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1701,17 +1719,17 @@ Push the branch, then run the workflow from the Actions tab via `workflow_dispat
 > **This task is stale as written (amended 2026-08-31).** The website work
 > landed: `site/` is now Astro + Starlight, and it renders the repository's own
 > Markdown through a custom content loader. Three of the four files below no
-> longer exist. The task's *intent* is unchanged — import the canonical JSON,
+> longer exist. The task's _intent_ is unchanged — import the canonical JSON,
 > render headline, trend and cohort table, redeploy on a results commit — but
 > re-read `site/` before following any snippet here. See
 > [the documentation site design](../specs/2026-08-31-docs-site-design.md).
 >
-> | Was | Now |
-> | --- | --- |
-> | `site/vite.config.ts` | `site/astro.config.ts`, under `vite.resolve.alias` |
-> | `site/src/App.tsx` | `site/src/pages/index.astro` |
-> | `site/src/components/Section.tsx` | `<section class="band">` + `src/styles/landing.css` |
-> | `IndexSection.tsx` (React) | prefer `IndexSection.astro` — the trend line and table are static at build time and need no client-side JavaScript |
+> | Was                               | Now                                                                                                                |
+> | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+> | `site/vite.config.ts`             | `site/astro.config.ts`, under `vite.resolve.alias`                                                                 |
+> | `site/src/App.tsx`                | `site/src/pages/index.astro`                                                                                       |
+> | `site/src/components/Section.tsx` | `<section class="band">` + `src/styles/landing.css`                                                                |
+> | `IndexSection.tsx` (React)        | prefer `IndexSection.astro` — the trend line and table are static at build time and need no client-side JavaScript |
 >
 > `pages.yml`'s path filter is also no longer one line; add `index/**` to the
 > existing list rather than replacing it.
