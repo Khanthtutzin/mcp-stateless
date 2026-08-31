@@ -133,6 +133,15 @@ export class StdioTransport implements Transport {
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
 
+    // A write to an ended or broken pipe fails asynchronously, so the
+    // try/catch around `stdin.write` below cannot see it. Without a listener
+    // here that error is uncaught and takes the whole process down — reachable
+    // whenever a caller closes the transport while a run is still in flight,
+    // which is exactly what a timeout or a per-target budget does.
+    child.stdin.on('error', (err: Error) => {
+      this.notes.push(`[stdin] ${err.message}`);
+    });
+
     child.stdout.on('data', (chunk: string) => this.onStdout(chunk));
     child.stderr.on('data', (chunk: string) => {
       const text = chunk.trim();
@@ -231,6 +240,18 @@ export class StdioTransport implements Transport {
         response: null,
         timingMs: Date.now() - started,
         transportError: 'Server process is no longer running.',
+      };
+    }
+
+    // Checked before building the request, so an abandoned run that outlived
+    // its transport gets an ordinary transport error rather than a late
+    // asynchronous stream failure.
+    if (child.stdin.writableEnded || child.stdin.destroyed) {
+      return {
+        ...base,
+        response: null,
+        timingMs: Date.now() - started,
+        transportError: 'Transport was closed before this request was sent.',
       };
     }
 
