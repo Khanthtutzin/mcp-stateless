@@ -54,3 +54,15 @@ export interface HistoryRow {
 
 export function parseRunSnapshot(text: string): RunSnapshot;
 export function summarise(snapshot: RunSnapshot): HistoryRow;
+
+export interface History {
+  schemaVersion: 1;
+  rows: HistoryRow[];
+}
+
+export function parseHistory(text: string): History;
+export function upsertRow(history: History, row: HistoryRow): History;
+export function applySnapshot(
+  snapshotText: string,
+  historyText: string,
+): { history: History; row: HistoryRow };

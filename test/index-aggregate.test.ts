@@ -1,8 +1,17 @@
-import { describe, expect, it } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  applySnapshot,
+  parseHistory,
   parseRunSnapshot,
   summarise,
+  upsertRow,
+  type HistoryRow,
   type RunSnapshot,
   type TargetResult,
 } from '../scripts/aggregate-index.mjs';
@@ -307,5 +316,259 @@ describe('summarise', () => {
     expect(row.ruleFailureCounts['__proto__']).toBe(2);
     expect(row.ruleFailureCounts['constructor']).toBe(1);
     expect(JSON.parse(JSON.stringify(row)).ruleFailureCounts['__proto__']).toBe(2);
+  });
+});
+
+// --- Task 2: history file ---------------------------------------------------
+
+function row(date: string, over: Partial<HistoryRow> = {}): HistoryRow {
+  return {
+    date,
+    toolVersion: '1.0.0',
+    rulesetSize: 18,
+    cohortSize: 2,
+    measured: 2,
+    unreachable: 0,
+    ready: 0,
+    medianErrors: 4,
+    sdkErrors: 6,
+    applicationErrors: 2,
+    ruleFailureCounts: { MCP001: 2 },
+    ...over,
+  };
+}
+
+function historyText(rows: unknown[], over: Record<string, unknown> = {}): string {
+  return JSON.stringify({ schemaVersion: 1, rows, ...over });
+}
+
+describe('parseHistory', () => {
+  it('accepts the seeded empty history', () => {
+    expect(parseHistory('{"schemaVersion":1,"rows":[]}').rows).toEqual([]);
+  });
+
+  it('rejects a history from a future schema', () => {
+    expect(() => parseHistory(historyText([], { schemaVersion: 2 }))).toThrow(
+      /schemaVersion/,
+    );
+  });
+
+  it('rejects text that is not JSON', () => {
+    expect(() => parseHistory('nope')).toThrow(/JSON/);
+  });
+
+  it('rejects rows that is not an array', () => {
+    expect(() => parseHistory('{"schemaVersion":1,"rows":{}}')).toThrow(/rows/);
+  });
+
+  it('rejects a row carrying an unexpected key', () => {
+    // history.json is committed and read by the site; a stray key means
+    // something wrote a shape the renderer does not know about.
+    const stray = { ...row('2026-09-07'), findings: [{ evidence: [] }] };
+    expect(() => parseHistory(historyText([stray]))).toThrow(/findings|unexpected/);
+  });
+
+  it('rejects a row with a malformed date', () => {
+    for (const date of ['2026-9-7', 'yesterday', '2026-09-07T06:00:00Z']) {
+      expect(() => parseHistory(historyText([row(date)]))).toThrow(/date/);
+    }
+  });
+
+  it('rejects a row with a non-integer count', () => {
+    expect(() => parseHistory(historyText([row('2026-09-07', { ready: 1.5 })]))).toThrow(
+      /ready/,
+    );
+    expect(() =>
+      parseHistory(historyText([row('2026-09-07', { sdkErrors: '6' as never })])),
+    ).toThrow(/sdkErrors/);
+  });
+
+  it('rejects a medianErrors that is neither null nor a number', () => {
+    expect(() =>
+      parseHistory(historyText([row('2026-09-07', { medianErrors: '4' as never })])),
+    ).toThrow(/medianErrors/);
+  });
+
+  it('accepts a fractional medianErrors, which an even cohort produces', () => {
+    expect(
+      parseHistory(historyText([row('2026-09-07', { medianErrors: 4.5 })])).rows[0]!
+        .medianErrors,
+    ).toBe(4.5);
+  });
+
+  it('rejects a row whose counts do not add up', () => {
+    // measured + unreachable must equal the cohort, and ready cannot exceed
+    // what was measured — otherwise the site renders percentages over 100%.
+    expect(() =>
+      parseHistory(historyText([row('2026-09-07', { measured: 1, unreachable: 0 })])),
+    ).toThrow(/cohortSize|add up/);
+    expect(() => parseHistory(historyText([row('2026-09-07', { ready: 3 })]))).toThrow(
+      /ready/,
+    );
+  });
+
+  it('rejects duplicate dates', () => {
+    expect(() =>
+      parseHistory(historyText([row('2026-09-07'), row('2026-09-07')])),
+    ).toThrow(/duplicate/i);
+  });
+});
+
+describe('upsertRow', () => {
+  it('appends a new date', () => {
+    const history = upsertRow(
+      { schemaVersion: 1, rows: [row('2026-09-07')] },
+      row('2026-09-14'),
+    );
+    expect(history.rows.map((r) => r.date)).toEqual(['2026-09-07', '2026-09-14']);
+  });
+
+  it('replaces a row for a date already present', () => {
+    // Re-running a scan for the same day corrects that day; it never appends a
+    // second row, which would double-count the cohort in the trend.
+    const history = upsertRow(
+      { schemaVersion: 1, rows: [row('2026-09-07', { ready: 0 })] },
+      row('2026-09-07', { ready: 2 }),
+    );
+    expect(history.rows).toHaveLength(1);
+    expect(history.rows[0]!.ready).toBe(2);
+  });
+
+  it('keeps rows sorted by date', () => {
+    const history = upsertRow(
+      { schemaVersion: 1, rows: [row('2026-09-14')] },
+      row('2026-09-07'),
+    );
+    expect(history.rows.map((r) => r.date)).toEqual(['2026-09-07', '2026-09-14']);
+  });
+
+  it('does not mutate the history it was given', () => {
+    const original = { schemaVersion: 1 as const, rows: [row('2026-09-07')] };
+    upsertRow(original, row('2026-09-14'));
+    expect(original.rows).toHaveLength(1);
+  });
+});
+
+describe('applySnapshot', () => {
+  const snapshotText = (results: TargetResult[]) =>
+    JSON.stringify({
+      schemaVersion: 1,
+      scannedAt: '2026-09-07T06:04:11.000Z',
+      toolVersion: '1.0.0',
+      rulesetSize: 18,
+      results,
+    });
+
+  it('adds the summarised row to the history', () => {
+    const { history, row: added } = applySnapshot(
+      snapshotText([goodResult()]),
+      '{"schemaVersion":1,"rows":[]}',
+    );
+    expect(added.date).toBe('2026-09-07');
+    expect(history.rows).toHaveLength(1);
+    expect(history.rows[0]!.measured).toBe(1);
+  });
+
+  it('is idempotent when the same snapshot is applied twice', () => {
+    const first = applySnapshot(
+      snapshotText([goodResult()]),
+      '{"schemaVersion":1,"rows":[]}',
+    );
+    const second = applySnapshot(
+      snapshotText([goodResult()]),
+      JSON.stringify(first.history),
+    );
+    expect(second.history.rows).toHaveLength(1);
+  });
+
+  it('refuses to record a run in which nothing was measurable', () => {
+    // A row of zeroes would be a false datum, not a measurement.
+    expect(() =>
+      applySnapshot(
+        snapshotText([goodResult({ unreachable: 'install failed' })]),
+        '{"schemaVersion":1,"rows":[]}',
+      ),
+    ).toThrow(/measurable/);
+  });
+});
+
+// --- The CLI entry, spawned as a real process -------------------------------
+
+describe('aggregate-index CLI', () => {
+  const script = fileURLToPath(
+    new URL('../scripts/aggregate-index.mjs', import.meta.url),
+  );
+
+  function run(args: string[]) {
+    return spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+  }
+
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'mcp-index-cli-'));
+    writeFileSync(join(dir, 'history.json'), '{"schemaVersion":1,"rows":[]}');
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  function writeSnapshot(name: string, results: TargetResult[]) {
+    const path = join(dir, name);
+    writeFileSync(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        scannedAt: '2026-09-07T06:00:00.000Z',
+        toolVersion: '0.1.5',
+        rulesetSize: 18,
+        results,
+      }),
+    );
+    return path;
+  }
+
+  it('appends a row and exits 0', () => {
+    const snapshot = writeSnapshot('snap.json', [goodResult()]);
+    const result = run(['--snapshot', snapshot, '--history', join(dir, 'history.json')]);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('2026-09-07');
+    const history = JSON.parse(readFileSync(join(dir, 'history.json'), 'utf8'));
+    expect(history.rows).toHaveLength(1);
+  });
+
+  it('replaces rather than appends when run twice for the same date', () => {
+    const snapshot = writeSnapshot('snap.json', [goodResult()]);
+    const args = ['--snapshot', snapshot, '--history', join(dir, 'history.json')];
+    run(args);
+    run(args);
+
+    const history = JSON.parse(readFileSync(join(dir, 'history.json'), 'utf8'));
+    expect(history.rows).toHaveLength(1);
+  });
+
+  it('exits 1 and leaves the history untouched when nothing was measurable', () => {
+    const snapshot = writeSnapshot('dead.json', [
+      goodResult({
+        unreachable: 'install failed',
+        errorCount: 0,
+        warningCount: 0,
+        sdkErrors: 0,
+        applicationErrors: 0,
+        failedRules: [],
+      }),
+    ]);
+    const result = run(['--snapshot', snapshot, '--history', join(dir, 'history.json')]);
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toMatch(/measurable/);
+    const history = JSON.parse(readFileSync(join(dir, 'history.json'), 'utf8'));
+    expect(history.rows).toEqual([]);
+  });
+
+  it('exits 2 when --snapshot is missing', () => {
+    const result = run([]);
+    expect(result.status).toBe(2);
+    expect(result.stderr).toContain('--snapshot');
   });
 });

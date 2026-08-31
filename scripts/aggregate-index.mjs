@@ -1,3 +1,6 @@
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 /**
  * Aggregate one compliance-index run into a single history row.
  *
@@ -219,4 +222,233 @@ export function summarise(snapshot) {
     applicationErrors: measured.reduce((n, r) => n + r.applicationErrors, 0),
     ruleFailureCounts,
   };
+}
+
+// --- History ---------------------------------------------------------------
+
+/** The only keys a history row may carry, and how each is validated. */
+const ROW_FIELDS = {
+  date: 'date',
+  toolVersion: 'text',
+  rulesetSize: 'positive',
+  cohortSize: 'count',
+  measured: 'count',
+  unreachable: 'count',
+  ready: 'count',
+  medianErrors: 'optionalNumber',
+  sdkErrors: 'count',
+  applicationErrors: 'count',
+  ruleFailureCounts: 'counts',
+};
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Validate one history-row field, returning an error message or null. */
+function checkRowField(kind, value) {
+  switch (kind) {
+    case 'date':
+      return typeof value === 'string' && DATE_ONLY.test(value)
+        ? null
+        : 'must be a YYYY-MM-DD date';
+    case 'text':
+      return isText(value) ? null : 'must be a non-empty string';
+    case 'positive':
+      return Number.isInteger(value) && value > 0 ? null : 'must be a positive integer';
+    case 'count':
+      return isCount(value) ? null : 'must be a non-negative integer';
+    case 'optionalNumber':
+      // Null when nothing was measurable; fractional when an even cohort
+      // averaged its two middle values.
+      return value === null || (typeof value === 'number' && Number.isFinite(value))
+        ? null
+        : 'must be null or a finite number';
+    case 'counts':
+      return value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        Object.values(value).every(isCount)
+        ? null
+        : 'must be an object of rule ids to non-negative integers';
+    default:
+      return `has no validator for ${kind}`;
+  }
+}
+
+/**
+ * Parse `index/history.json`.
+ *
+ * Validated as strictly as a run snapshot, for a different reason: this file is
+ * committed, append-only, and read by the site. One malformed row would render
+ * a percentage over 100% or corrupt the ordering of the trend, and it would keep
+ * doing so every week afterwards.
+ */
+export function parseHistory(text) {
+  let raw;
+  try {
+    raw = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`History is not valid JSON: ${err.message}`);
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('History must be an object.');
+  }
+
+  rejectUnknownKeys(Object.keys(raw), ['schemaVersion', 'rows'], 'History');
+
+  if (raw.schemaVersion !== 1) {
+    throw new Error(
+      `Unsupported history schemaVersion ${JSON.stringify(raw.schemaVersion)}; expected 1.`,
+    );
+  }
+  if (!Array.isArray(raw.rows)) throw new Error('History rows must be an array.');
+
+  const seen = new Set();
+  for (const [index, row] of raw.rows.entries()) {
+    if (row === null || typeof row !== 'object' || Array.isArray(row)) {
+      throw new Error(`History row at index ${index} must be an object.`);
+    }
+    const named = `History row ${JSON.stringify(row.date ?? `#${index}`)}`;
+    rejectUnknownKeys(Object.keys(row), Object.keys(ROW_FIELDS), named);
+
+    for (const [field, kind] of Object.entries(ROW_FIELDS)) {
+      if (!(field in row)) throw new Error(`${named} is missing ${field}.`);
+      const problem = checkRowField(kind, row[field]);
+      if (problem) {
+        throw new Error(
+          `${named} field ${field} ${problem}, got ${JSON.stringify(row[field])}.`,
+        );
+      }
+    }
+
+    // Arithmetic the renderer relies on. A row that does not add up produces
+    // nonsense on the page rather than an error, which is worse.
+    if (row.measured + row.unreachable !== row.cohortSize) {
+      throw new Error(
+        `${named}: measured (${row.measured}) plus unreachable (${row.unreachable}) must equal cohortSize (${row.cohortSize}).`,
+      );
+    }
+    if (row.ready > row.measured) {
+      throw new Error(
+        `${named}: ready (${row.ready}) cannot exceed measured (${row.measured}).`,
+      );
+    }
+
+    if (seen.has(row.date)) {
+      throw new Error(`Duplicate history row for ${JSON.stringify(row.date)}.`);
+    }
+    seen.add(row.date);
+  }
+
+  return raw;
+}
+
+/**
+ * Add a row, replacing any row already recorded for the same date.
+ *
+ * Re-running a scan for a given day corrects that day. Appending instead would
+ * double-count the cohort in the trend, and the file is append-only in the sense
+ * that history is never rewritten — not that a mistake can never be fixed.
+ * Returns a new object; the input is left alone.
+ */
+export function upsertRow(history, row) {
+  const rows = history.rows.filter((existing) => existing.date !== row.date);
+  rows.push(row);
+  rows.sort((a, b) => a.date.localeCompare(b.date));
+  return { ...history, rows };
+}
+
+/**
+ * Fold a run snapshot into a history: parse both, summarise, upsert.
+ *
+ * The zero-measurable refusal lives here rather than in the CLI so that it is
+ * testable. A row of zeroes would be a false datum, not a measurement — the
+ * same reasoning that makes an unreachable server report no findings at all.
+ */
+export function applySnapshot(snapshotText, historyText) {
+  const row = summarise(parseRunSnapshot(snapshotText));
+  if (row.measured === 0) {
+    throw new Error(
+      `Nothing was measurable in the run of ${row.date} (${row.unreachable} of ${row.cohortSize} targets unreachable); refusing to record a row.`,
+    );
+  }
+  return { history: upsertRow(parseHistory(historyText), row), row };
+}
+
+// --- CLI -------------------------------------------------------------------
+
+/**
+ * Only this entry point touches the filesystem. Keeping it below the exports,
+ * and behind a direct-invocation check, is what lets the tests import the pure
+ * half without a build step or a temp directory.
+ *
+ *   node scripts/aggregate-index.mjs --snapshot index/runs/2026-09-07.json
+ */
+async function cli(argv) {
+  const { readFileSync, writeFileSync } = await import('node:fs');
+  const { parseArgs } = await import('node:util');
+
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      options: {
+        snapshot: { type: 'string' },
+        history: { type: 'string', default: 'index/history.json' },
+      },
+    }));
+  } catch (err) {
+    process.stderr.write(`${err.message}\n`);
+    return 2;
+  }
+
+  if (!values.snapshot) {
+    process.stderr.write(
+      'Usage: node scripts/aggregate-index.mjs --snapshot <file> [--history <file>]\n',
+    );
+    return 2;
+  }
+
+  const { history, row } = applySnapshot(
+    readFileSync(values.snapshot, 'utf8'),
+    readFileSync(values.history, 'utf8'),
+  );
+
+  writeFileSync(values.history, `${JSON.stringify(history, null, 2)}\n`, 'utf8');
+  process.stdout.write(
+    `${row.date}: ${row.ready}/${row.measured} ready` +
+      `${row.unreachable ? `, ${row.unreachable} not measurable` : ''}` +
+      ` (median ${row.medianErrors} breaking, ruleset ${row.rulesetSize})\n`,
+  );
+  return 0;
+}
+
+/**
+ * True when this file was run directly rather than imported.
+ *
+ * Compared via realpath, exactly as src/cli/index.ts does it. The obvious
+ * version — `import.meta.url === \`file://${process.argv[1]}\`` — never matches
+ * on Windows, where argv[1] is `C:\dir\file.mjs` and import.meta.url is
+ * `file:///C:/dir/file.mjs`, percent-encoded. The failure is silent: the script
+ * runs, does nothing, and exits 0.
+ */
+function isDirectInvocation() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectInvocation()) {
+  cli(process.argv.slice(2)).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err) => {
+      process.stderr.write(`aggregate-index failed: ${err.message}\n`);
+      process.exitCode = 1;
+    },
+  );
 }
