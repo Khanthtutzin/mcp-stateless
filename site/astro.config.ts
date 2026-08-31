@@ -34,6 +34,12 @@ export default defineConfig({
         'Check whether an MCP server is ready for the 2026-07-28 stateless specification.',
       customCss: ['./src/styles/theme.css'],
       editLink: { baseUrl: `${REPO_URL}/edit/main/` },
+
+      // No site search. This also stops the Pagefind index being built, so the
+      // deployed output carries no search bundle at all rather than a hidden
+      // one. The sidebar is the whole navigation surface: eighteen rule pages
+      // listed by id, which is how a reader arrives — with a finding in hand.
+      pagefind: false,
       social: [
         { icon: 'github', label: 'GitHub', href: REPO_URL },
         { icon: 'npm', label: 'npm', href: NPM_URL },
