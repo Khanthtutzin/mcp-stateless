@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "targets": [
+    {
+      "kind": "npm",
+      "id": "modelcontextprotocol-server-everything",
+      "label": "server-everything",
+      "package": "@modelcontextprotocol/server-everything",
+      "version": "2026.8.18",
+      "bin": "mcp-server-everything",
+      "transport": "stdio",
+      "note": "official reference server, exercises every capability"
+    },
+    {
+      "kind": "npm",
+      "id": "modelcontextprotocol-server-memory",
+      "label": "server-memory",
+      "package": "@modelcontextprotocol/server-memory",
+      "version": "2026.7.4",
+      "bin": "mcp-server-memory",
+      "transport": "stdio",
+      "note": "official reference server"
+    },
+    {
+      "kind": "npm",
+      "id": "modelcontextprotocol-server-filesystem",
+      "label": "server-filesystem",
+      "package": "@modelcontextprotocol/server-filesystem",
+      "version": "2026.7.10",
+      "bin": "mcp-server-filesystem",
+      "transport": "stdio",
+      "note": "official reference server"
+    },
+    {
+      "kind": "npm",
+      "id": "modelcontextprotocol-server-sequential-thinking",
+      "label": "server-sequential-thinking",
+      "package": "@modelcontextprotocol/server-sequential-thinking",
+      "version": "2026.7.4",
+      "bin": "mcp-server-sequential-thinking",
+      "transport": "stdio",
+      "note": "official reference server"
+    }
+  ]
+}
