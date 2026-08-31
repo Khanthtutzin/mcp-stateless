@@ -45,6 +45,11 @@ import type { RunSnapshot, TargetResult } from './aggregate-index.d.mts';
 export interface Lib {
   runChecks: typeof import('../src/run.js').runChecks;
   StdioTransport: typeof import('../src/transport/stdio.js').StdioTransport;
+  /**
+   * Used to reject a malformed command before the transport turns it into
+   * something that looks like the server's fault.
+   */
+  tokenizeCommand: typeof import('../src/transport/stdio.js').tokenizeCommand;
 }
 
 export type Probe = (target: Target, opts?: { timeoutMs?: number }) => Promise<RunReport>;
@@ -53,13 +58,13 @@ export function createProbe(lib: Lib): Probe;
 
 export function toResult(target: Target, report: RunReport): TargetResult;
 
-export function scanTargets(
-  targets: Target[],
-  opts: {
-    probe: Probe;
-    timeoutMs?: number;
-    toolVersion: string;
-    rulesetSize: number;
-    now?: () => Date;
-  },
-): Promise<RunSnapshot>;
+export interface ScanOptions {
+  probe: Probe;
+  timeoutMs?: number;
+  toolVersion: string;
+  rulesetSize: number;
+  /** Injected so a snapshot can be given a fixed timestamp in tests. */
+  now?: () => Date;
+}
+
+export function scanTargets(targets: Target[], opts: ScanOptions): Promise<RunSnapshot>;

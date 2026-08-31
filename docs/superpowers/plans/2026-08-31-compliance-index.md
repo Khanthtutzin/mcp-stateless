@@ -953,7 +953,7 @@ git commit -m "feat(index): curated cohort with pinned-version validation"
 
 Why `probe` is injected: the CLI probes through the built `dist/`, exactly as a user would, while the test probes through `src/` so it runs without a build step. Same logic, no environment variables, no duplicated code path.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `test/index-scan.test.ts`:
 
@@ -1092,12 +1092,12 @@ describe('scanTargets', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run test/index-scan.test.ts`
 Expected: FAIL — `createProbe is not a function`.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 Append to `scripts/scan-index.mjs`:
 
@@ -1234,17 +1234,17 @@ export function scanTargets(
 
 Create `index/runs/.gitkeep` (empty file), so the directory exists before the first run.
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run test/index-scan.test.ts`
 Expected: PASS, 16 tests. Note `createProbe` currently reads `target.command` for both kinds — Task 5 replaces that line; the local path is what these tests exercise.
 
-- [ ] **Step 5: Run the full gates**
+- [x] **Step 5: Run the full gates**
 
 Run: `npm run typecheck && npm run lint && npm test`
 Expected: all pass, 100+ tests.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 npx prettier --write scripts/scan-index.mjs scripts/scan-index.d.mts test/index-scan.test.ts
@@ -1253,6 +1253,44 @@ git commit -m "feat(index): scan a cohort into a verdict snapshot"
 ```
 
 ---
+
+#### Amendment (2026-08-31): what changed during implementation
+
+Task 4 landed as `29c65ea` and was then hardened in response to an adversarial
+review. Four deviations from the steps above:
+
+1. **`createProbe` refuses an npm target** instead of reading `target.command`
+   for both kinds via the placeholder ternary. That ternary would have spawned a
+   bin that is not on the machine and recorded the resulting `ENOENT` as though
+   the _server_ were at fault — the exact misattribution the unreachable split
+   exists to prevent. Task 5 replaces the `throw` with a real install path.
+2. **`Lib` gained `tokenizeCommand`.** A malformed command (unbalanced quoting,
+   empty string) is caught inside the transport and surfaces as a transport
+   error, indistinguishable from a server going dark — and the transport's
+   message quotes the whole command line back, credentials included. `probe`
+   now parses argv first and fails with a message that names neither.
+3. **A third run state exists.** `runChecks` sets `RunReport.incomplete` when
+   some probes got answers and others got none; no such run is `ready`, the CLI
+   exits `2`, and `toResult` files the target as not measurable. See the
+   amendment in the design spec. Without it a server that answered once and then
+   died was published as `ready: true`.
+4. **A local target is named `local:<id>`, never by its command.** The command
+   carries absolute paths and whatever `--api-key` was passed, and `unreachable`
+   is the only free-text field in the snapshot schema, so the aggregator's
+   allow-list cannot inspect it.
+
+**Carried into Task 5** — do not skip these:
+
+- `createProbe` currently passes `timeoutMs: undefined` through to the
+  transport's 10 s default, so a mute server costs roughly 100 s per target.
+  The CLI needs an explicit `--timeout` and a per-target budget.
+- The scanner CLI must **refuse to write a snapshot containing a local target**
+  unless explicitly forced. `--allow-local` is exactly the flag a maintainer
+  would use before committing a snapshot by hand, and `local:<id>` rows do not
+  belong in published data.
+- `StdioTransport`'s `stdoutBuffer` and `notes` are unbounded (the HTTP
+  transport caps at 512 KB). Freed per target, so not cumulative, but Task 5 is
+  the first code to point this at N third-party servers.
 
 ### Task 5: Installing npm targets, and the scanner CLI
 

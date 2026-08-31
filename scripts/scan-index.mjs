@@ -257,6 +257,24 @@ export function createProbe(lib) {
       );
     }
 
+    // Parse argv before constructing the transport. Inside the transport an
+    // unbalanced quote becomes a transport error, which is indistinguishable
+    // from a server going dark — and its message quotes the whole command line
+    // back, credentials included. Failing here instead attributes our own bug
+    // to us and says nothing about the server.
+    let argv;
+    try {
+      argv = lib.tokenizeCommand(target.command);
+    } catch {
+      throw new Error(
+        `command for ${JSON.stringify(target.id)} could not be parsed as argv ` +
+          '(unbalanced quoting). The command is omitted here because it can carry credentials.',
+      );
+    }
+    if (argv.length === 0) {
+      throw new Error(`command for ${JSON.stringify(target.id)} is empty.`);
+    }
+
     const transport = new lib.StdioTransport(target.command);
     try {
       return await lib.runChecks(transport, { timeoutMs: opts.timeoutMs });
@@ -268,17 +286,51 @@ export function createProbe(lib) {
   };
 }
 
-/** A message for anything that was thrown, including things that are not Errors. */
-function describeError(err) {
-  if (err instanceof Error) return err.message;
-  return typeof err === 'string' ? err : JSON.stringify(err);
+/**
+ * A committed reason is capped: the field is free text, and an unbounded
+ * message means an unbounded diff on a file people read in a browser.
+ */
+const MAX_REASON = 300;
+
+function cap(text) {
+  return text.length > MAX_REASON ? `${text.slice(0, MAX_REASON)}… (truncated)` : text;
 }
 
-/** What the index calls this target, and which release it names. */
+/**
+ * Describe anything that was thrown, in text that is safe to commit.
+ *
+ * Two rules, both learned the hard way. Never serialise the thrown *value*:
+ * `unreachable` is the one field the aggregator's allow-list cannot look
+ * inside, so an object carrying an `Exchange` — headers, tokens — would go
+ * straight into a public file. And never throw: this runs inside the catch
+ * handler that keeps the sweep alive, so a value that resists serialisation
+ * (a circular object, a BigInt) would discard every verdict already collected.
+ */
+function describeError(err) {
+  let text;
+  try {
+    text = err instanceof Error ? err.message : `${typeof err} thrown: ${String(err)}`;
+  } catch {
+    // A getter or toString that throws. All we can honestly report is that.
+    text = 'unprintable value thrown';
+  }
+  if (typeof text !== 'string') text = 'unprintable value thrown';
+  return cap(text);
+}
+
+/**
+ * What the index calls this target, and which release it names.
+ *
+ * A local target is named by its id, never by its command. The command is a
+ * developer's own command line: absolute paths under their home directory, and
+ * whatever `--api-key` they passed. Local targets are refused in the published
+ * cohort, but the flag that allows one is exactly the flag a maintainer would
+ * use before committing a snapshot by hand.
+ */
 function identify(target) {
   return target.kind === 'npm'
     ? { package: target.package, version: target.version }
-    : { package: target.command, version: 'local' };
+    : { package: `local:${target.id}`, version: 'local' };
 }
 
 /**
@@ -323,6 +375,18 @@ export function toResult(target, report) {
   }
 
   if (report.unreachable) return unmeasured(target, report.unreachable);
+
+  // A run that lost some probes and not others. Every rule treats an
+  // unanswered probe as telling it nothing and reports no finding, so a server
+  // that died partway through would otherwise arrive here with zero errors and
+  // be published as ready off a fraction of the ruleset.
+  if (report.incomplete) {
+    const { failed, probes, reason } = report.incomplete;
+    return unmeasured(
+      target,
+      `incomplete: ${failed} of ${probes} probes got no answer (${cap(reason)})`,
+    );
+  }
 
   const errors = report.findings.filter((finding) => finding.severity === 'error');
   return {

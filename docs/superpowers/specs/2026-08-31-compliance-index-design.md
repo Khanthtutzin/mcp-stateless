@@ -251,6 +251,7 @@ and the surrounding copy says so.
 | --------------------------------- | ---------------------------------------------------------------------------------------- |
 | Target fails to install           | Recorded `unreachable: "install failed: …"`, excluded from denominators, sweep continues |
 | Target installs but never answers | `runChecks` returns `UNREACHABLE`; recorded the same way and rendered "not measurable"   |
+| Target answers, then stops        | `runChecks` sets `incomplete`; recorded `unreachable: "incomplete: N of M probes …"`     |
 | A rule crashes                    | **Fails the run loudly.** That is a bug in the tool, and silence would hide it           |
 | Snapshot fails `parseRunSnapshot` | `commit` job fails without committing; the previous data stays live                      |
 | Zero targets measurable           | No history row is appended; the workflow fails. A row of zeroes would be a false datum   |
@@ -258,6 +259,23 @@ and the surrounding copy says so.
 Unreachable targets are excluded from the percentage denominator and shown as
 "not measurable", never as "failing" — the same principle as the CLI's refusal to
 convert a launch failure into eighteen verdicts.
+
+### Amendment (2026-08-31): a partial probe is not a verdict either
+
+This section originally modelled two outcomes, "answers" and "never answers".
+There is a third, and it is the dangerous one. Every rule treats a probe that
+got no answer as telling it nothing and reports no finding, so a server that
+replied correctly and then died came out of `runChecks` with zero errors and
+`ready: true` — a green row in the index drawn from a fraction of the ruleset.
+The realistic trigger is a server that crashes on the legacy `initialize` probe,
+which is exactly the probe designed to provoke error paths.
+
+`RunReport` therefore carries `incomplete: { probes, failed, reason }` whenever
+some probes went unanswered and others did not, no run carrying it is `ready`,
+and `toResult` files such a target as not measurable. Two consequences for this
+design: the readiness denominator counts only fully answered runs, and a row's
+`unreachable` reason may now begin `incomplete:`, which the site should render
+as "not measurable" with the fraction shown rather than as a failure.
 
 ## Testing
 
