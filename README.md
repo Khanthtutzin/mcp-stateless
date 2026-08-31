@@ -20,6 +20,7 @@ npx mcp-stateless --stdio "node dist/server.js"
 ```
 
 **[Documentation](https://khanthtutzin.github.io/mcp-stateless/)** ·
+[User guide](docs/user-guide.md) ·
 [Usage](docs/usage.md) ·
 [In CI](docs/ci.md) ·
 [Rules](docs/rules/README.md) ·

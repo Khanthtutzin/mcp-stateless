@@ -36,6 +36,7 @@ const ROOT_PAGES: Record<string, string> = {
 /** Files under `docs/` published at a slug that is not simply their name. */
 const DOC_PAGES: Record<string, string> = {
   'docs/overview.md': 'overview',
+  'docs/user-guide.md': 'user-guide',
   'docs/rules/README.md': 'rules',
   'docs/ARCHITECTURE.md': 'architecture',
   'docs/migration-walkthrough.md': 'migration-walkthrough',
@@ -70,6 +71,7 @@ export function urlForSlug(slug: string): string {
 /** Every non-rule file this site publishes, in sidebar order. */
 export const PUBLISHED_FILES: readonly string[] = [
   'docs/overview.md',
+  'docs/user-guide.md',
   'docs/usage.md',
   'docs/ci.md',
   'docs/faq.md',

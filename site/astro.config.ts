@@ -51,6 +51,7 @@ export default defineConfig({
           // page a reader who arrived from nowhere needs before the flags.
           items: [
             { slug: 'overview' },
+            { slug: 'user-guide' },
             { slug: 'usage' },
             { slug: 'ci' },
             { slug: 'faq' },

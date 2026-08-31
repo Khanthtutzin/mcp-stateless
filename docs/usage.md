@@ -1,6 +1,8 @@
 # Usage
 
 Everything the command-line interface accepts, and what each exit code means.
+For the order to actually do things in — first run, triage, CI — read the
+[User guide](user-guide.md) instead.
 
 Nothing needs installing. `npx` fetches the published package, which carries a
 signed provenance attestation tying it to the workflow run that built it.
