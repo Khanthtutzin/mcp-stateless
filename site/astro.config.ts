@@ -47,7 +47,14 @@ export default defineConfig({
       sidebar: [
         {
           label: 'Getting started',
-          items: [{ slug: 'usage' }, { slug: 'ci' }, { slug: 'faq' }],
+          // Overview first: it assumes no knowledge of MCP, which is the one
+          // page a reader who arrived from nowhere needs before the flags.
+          items: [
+            { slug: 'overview' },
+            { slug: 'usage' },
+            { slug: 'ci' },
+            { slug: 'faq' },
+          ],
         },
         {
           label: 'Rules',
