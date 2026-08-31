@@ -12,11 +12,11 @@ import { Fragment } from 'react';
 type Tone = 'break' | 'advisory' | 'ready' | 'dim' | 'plain';
 
 const TONE: Record<Tone, string> = {
-  break: 'text-break',
-  advisory: 'text-advisory',
-  ready: 'text-ready',
-  dim: 'text-muted',
-  plain: 'text-paper',
+  break: 't-break',
+  advisory: 't-advisory',
+  ready: 't-ready',
+  dim: 't-dim',
+  plain: 't-plain',
 };
 
 interface Segment {
@@ -87,17 +87,14 @@ export default function ReportOutput({
   body: string;
 }) {
   return (
-    <pre className="overflow-x-auto px-4 py-5 font-mono text-[0.68rem] leading-[1.75] sm:px-6 sm:text-[0.78rem]">
+    <pre className="term-out">
       <code>
-        <span className="text-muted">$ {command}</span>
+        <span className="t-dim">$ {command}</span>
         {'\n\n'}
         {body.split('\n').map((line, i) => (
           <Fragment key={i}>
             {parseLine(line).map((seg, j) => (
-              <span
-                key={j}
-                className={`${TONE[seg.tone]}${seg.bold ? ' font-bold' : ''}`}
-              >
+              <span key={j} className={`${TONE[seg.tone]}${seg.bold ? ' t-bold' : ''}`}>
                 {seg.text}
               </span>
             ))}

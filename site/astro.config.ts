@@ -3,7 +3,6 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import react from '@astrojs/react';
 import { satteri } from '@astrojs/markdown-satteri';
-import tailwindcss from '@tailwindcss/vite';
 import { rewriteRepoLinks } from './src/plugins/rewrite-links';
 import { NPM_URL, REPO_URL, SITE_BASE } from './src/docs-manifest';
 
@@ -67,5 +66,4 @@ export default defineConfig({
     react(),
   ],
 
-  vite: { plugins: [tailwindcss()] },
 });

@@ -1,7 +1,339 @@
 ---
-import StarlightPage from "@astrojs/starlight/components/StarlightPage.astro";
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import CommandBar from '../components/CommandBar';
+import ReportTabs from '../components/ReportTabs';
+import { ACTION_REF, NPM_URL, REPO_URL, urlForSlug } from '../docs-manifest';
+import '../styles/landing.css';
+
+const REMOVED = [
+  'initialize handshake',
+  'Mcp-Session-Id and sessions',
+  'ping, logging/setLevel',
+  'resources/subscribe',
+  'Server-initiated requests',
+  'SSE stream resumability',
+];
+
+const ADDED = [
+  'server/discover (mandatory)',
+  'Per-request _meta envelope',
+  'resultType on every result',
+  'ttlMs / cacheScope',
+  'Multi Round-Trip Requests',
+  'Renumbered error codes',
+];
+
+/**
+ * Every finding from the run shown in the hero's first tab, verbatim. The
+ * point of the section is the shape of the right-hand column, so the rows have
+ * to be the real ones — a curated subset would make the shape a claim rather
+ * than a result.
+ */
+const LEDGER = [
+  { id: 'MCP001', what: 'server/discover is not implemented', owner: 'sdk' },
+  { id: 'MCP002', what: 'Still accepts the removed initialize method', owner: 'sdk' },
+  { id: 'MCP004', what: 'Results are missing the required resultType', owner: 'sdk' },
+  { id: 'MCP005', what: 'List results are missing the required ttlMs', owner: 'sdk' },
+  { id: 'MCP005', what: 'List results are missing a valid cacheScope', owner: 'sdk' },
+  { id: 'MCP006', what: 'The removed ping method is still implemented', owner: 'sdk' },
+  {
+    id: 'MCP009',
+    what: 'subscriptions/listen missing despite listChanged',
+    owner: 'sdk',
+  },
+  { id: 'MCP018', what: 'Results do not identify the server via _meta', owner: 'sdk' },
+];
+
+const RULES = [
+  {
+    id: 'MCP001',
+    tone: 'breaking',
+    what: 'server/discover not implemented',
+    who: 'SDK upgrade',
+  },
+  {
+    id: 'MCP004',
+    tone: 'breaking',
+    what: 'Results missing required resultType',
+    who: 'SDK upgrade',
+  },
+  {
+    id: 'MCP011',
+    tone: 'breaking',
+    what: 'Resource-not-found still returns -32002',
+    who: 'SDK upgrade',
+  },
+  {
+    id: 'MCP013',
+    tone: 'breaking',
+    what: 'Rejects the _meta protocol envelope',
+    who: 'your code',
+  },
+  {
+    id: 'MCP015',
+    tone: 'advisory',
+    what: 'Declares deprecated Roots / Sampling / Logging',
+    who: 'your code',
+  },
+  {
+    id: 'MCP017',
+    tone: 'advisory',
+    what: 'tools/list ordering not deterministic',
+    who: 'your code',
+  },
+];
+
+const STATS = [
+  { n: '18', label: 'rules, each citing a changelog entry' },
+  { n: '14', label: 'checks in a single stdio run' },
+  { n: '0', label: 'runtime dependencies', accent: true },
+  { n: '5', label: 'defects this found in itself, all fixed', accent: true },
+];
+
+const description =
+  'Point it at a running MCP server and it reports which of the 2026-07-28 stateless breaking changes that server fails — with the wire traffic that proves each one, and whether it is your bug or your SDK’s.';
 ---
 
-<StarlightPage frontmatter={{ title: "mcp-stateless", template: "splash" }}>
-  <p>Landing placeholder.</p>
+<StarlightPage
+  frontmatter={{
+    title: 'Is your MCP server ready for 2026-07-28?',
+    description,
+    template: 'splash',
+    tableOfContents: false,
+    pagefind: true,
+  }}
+>
+  <div class="wrap landing-page">
+    <!-- Hero ─────────────────────────────────────────────────────────── -->
+    <section class="hero">
+      <p class="eyebrow">MCP conformance · revision 2026-07-28</p>
+
+      <h2 class="display">
+        Your MCP server stopped being compliant on <span class="date">2026-07-28</span>.
+      </h2>
+
+      <p class="lede">
+        The protocol went stateless. The handshake, sessions, <code>ping</code> and per-resource
+        subscriptions were all removed. One command tells you exactly what your server fails
+        — and usually, that none of it is your code.
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" href={urlForSlug('usage')}>Get started</a>
+        <a class="btn" href={REPO_URL}>View on GitHub</a>
+        <a class="btn" href={NPM_URL}>npm</a>
+      </div>
+
+      <CommandBar client:load command='npx mcp-stateless --stdio "node dist/server.js"' />
+
+      <ReportTabs client:load />
+    </section>
+
+    <!-- What changed ─────────────────────────────────────────────────── -->
+    <section class="band">
+      <p class="eyebrow">What changed · 6 removed, 6 added</p>
+      <h2 class="title">The largest breaking change in the protocol's history.</h2>
+      <p class="intro">
+        Revision 2026-07-28 made MCP stateless. Every server has to migrate, on a
+        twelve-month deprecation clock, and the specification shipped no tooling to tell
+        an author where their server stands.
+      </p>
+
+      <div class="changed">
+        <div class="changed-col">
+          <p class="changed-head removed">Removed</p>
+          <ul class="changed-list">
+            {REMOVED.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+        <div class="changed-col">
+          <p class="changed-head added">Added</p>
+          <ul class="changed-list">
+            {ADDED.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- The ledger ───────────────────────────────────────────────────── -->
+    <section class="band">
+      <p class="eyebrow">Who fixes it</p>
+      <h2 class="title">Eight findings. Zero of them yours.</h2>
+      <p class="intro">
+        You never wrote a <code>ping</code> handler — your SDK registered one. So every rule
+        declares who owns the fix, and the verdict splits on that line. This is the run from
+        the tab above, itemised.
+      </p>
+
+      <div class="ledger">
+        <div class="ledger-row ledger-head">
+          <span>Finding</span>
+          <span class="ledger-owner">SDK</span>
+          <span class="ledger-owner">Yours</span>
+        </div>
+
+        {
+          LEDGER.map((row) => (
+            <div class="ledger-row">
+              <span>
+                <span class="ledger-id">{row.id}</span>
+                <span class="ledger-what">{row.what}</span>
+              </span>
+              <span class="ledger-owner">
+                <span class={row.owner === 'sdk' ? 'mark-sdk' : 'mark-none'}>
+                  {row.owner === 'sdk' ? '●' : '·'}
+                </span>
+              </span>
+              <span class="ledger-owner">
+                <span class={row.owner === 'you' ? 'mark-you' : 'mark-none'}>
+                  {row.owner === 'you' ? '●' : '·'}
+                </span>
+              </span>
+            </div>
+          ))
+        }
+
+        <div class="ledger-total">
+          <span>8 findings</span>
+          <span class="count count-sdk">8</span>
+          <span class="count count-you">0</span>
+        </div>
+      </div>
+
+      <p class="ledger-note">
+        <span class="punch">One dependency bump.</span> That is the whole remediation for this
+        server. Three of the eighteen rules do land on your code — MCP013, MCP015 and MCP017
+        — and this server tripped none of them. Knowing which column a finding falls in is worth
+        more than the list above it.
+      </p>
+    </section>
+
+    <!-- What it checks ───────────────────────────────────────────────── -->
+    <section class="band">
+      <p class="eyebrow">18 rules · 14 breaking · 4 advisory</p>
+      <h2 class="title">Every finding cites the change it enforces.</h2>
+      <p class="intro">
+        No heuristics and no opinions. Each rule maps to a named entry in the changelog,
+        reports the JSON-RPC exchange behind it, and says who has to act.
+      </p>
+
+      <div class="rules">
+        {
+          RULES.map((rule) => (
+            <a class="rule" href={`${urlForSlug('rules')}${rule.id.toLowerCase()}/`}>
+              <code class:list={['rule-id', rule.tone]}>{rule.id}</code>
+              <span>{rule.what}</span>
+              <span class="rule-who">{rule.who}</span>
+            </a>
+          ))
+        }
+      </div>
+
+      <a class="more" href={urlForSlug('rules')}>All 18 rules, with a page each →</a>
+    </section>
+
+    <!-- Proven ───────────────────────────────────────────────────────── -->
+    <section class="band">
+      <p class="eyebrow">Proven against real servers</p>
+      <h2 class="title">Tested on software nobody here wrote.</h2>
+      <p class="intro">
+        Fixtures only prove a tool against servers built to trip it. This also runs
+        against the official MCP servers, and against the TypeScript SDK v2 built from
+        source — where it found five defects in itself, every one of which had produced a
+        false result. All fixed, all covered by regression tests.
+      </p>
+
+      <div class="stats">
+        {
+          STATS.map((stat) => (
+            <div class:list={['stat', stat.accent && 'stat-accent']}>
+              <b>{stat.n}</b>
+              <span>{stat.label}</span>
+            </div>
+          ))
+        }
+      </div>
+
+      <a class="more" href={urlForSlug('migration-walkthrough')}>
+        Read the walkthrough — one server, seven findings to READY →
+      </a>
+    </section>
+
+    <!-- Getting started ──────────────────────────────────────────────── -->
+    <section class="band">
+      <p class="eyebrow">Getting started</p>
+      <h2 class="title">Nothing to install.</h2>
+
+      <div class="steps">
+        <div class="step">
+          <span class="step-n">STEP 1</span>
+          <h3>Point it at your server</h3>
+          <p>
+            Over stdio or Streamable HTTP. It never calls a tool — tools have side effects
+            — so it is safe to run against something live.
+          </p>
+          <pre><code>npx mcp-stateless \
+  --stdio "node dist/server.js"</code></pre>
+        </div>
+
+        <div class="step">
+          <span class="step-n">STEP 2</span>
+          <h3>Read the verdict</h3>
+          <p>
+            Each finding names what was expected, what the server actually answered, and
+            the fix. Add <code>--verbose</code> for the JSON-RPC traffic behind it.
+          </p>
+          <pre><code>NOT READY — 7 breaking
+  7 owned by your SDK
+  0 need your code</code></pre>
+        </div>
+
+        <div class="step">
+          <span class="step-n">STEP 3</span>
+          <h3>Keep it fixed</h3>
+          <p>
+            Wire the action into CI. Upload SARIF and findings appear in the Security tab
+            and inline on pull requests.
+          </p>
+          <pre><code>{`- uses: Khanthtutzin/mcp-stateless@${ACTION_REF}
+  with:
+    stdio: node dist/server.js
+    fail-on: error`}</code></pre>
+        </div>
+      </div>
+
+      <a class="more" href={urlForSlug('ci')}>Full CI guide →</a>
+    </section>
+
+    <!-- Closing ──────────────────────────────────────────────────────── -->
+    <section class="band closing">
+      <p class="eyebrow">Twelve-month deprecation clock</p>
+      <h2 class="title">Find out in about ten seconds.</h2>
+      <p class="intro">
+        Exit <code>0</code> ready · <code>1</code> findings · <code>2</code> usage error, unreachable
+        server, or a file it could not write. A server it cannot reach produces no findings
+        at all, rather than eighteen confident guesses.
+      </p>
+
+      <CommandBar
+        client:load
+        command="npx mcp-stateless --http https://api.example.com/mcp"
+      />
+
+      <div class="hero-actions">
+        <a class="btn btn-primary" href={urlForSlug('usage')}>Read the docs</a>
+        <a class="btn" href={urlForSlug('faq')}>FAQ</a>
+        <a class="btn" href={REPO_URL}>GitHub</a>
+      </div>
+
+      <p class="affiliation">
+        An independent open-source project. Not affiliated with, endorsed by, or an
+        official part of the Model Context Protocol project or Anthropic. “Model Context
+        Protocol” and MCP are used only to describe what this tool checks against.
+        Findings reported about any third-party server describe that server's observable
+        protocol behaviour at a point in time, nothing more — and every one of them is
+        reproducible with a single command, printed alongside the finding.
+      </p>
+    </section>
+  </div>
 </StarlightPage>

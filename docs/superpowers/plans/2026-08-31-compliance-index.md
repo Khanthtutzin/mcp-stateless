@@ -1698,11 +1698,29 @@ Push the branch, then run the workflow from the Actions tab via `workflow_dispat
 
 **Do not start this task until the concurrent website work is merged or paused.** Every file here is owned by that effort. Confirm with the user first.
 
+> **This task is stale as written (amended 2026-08-31).** The website work
+> landed: `site/` is now Astro + Starlight, and it renders the repository's own
+> Markdown through a custom content loader. Three of the four files below no
+> longer exist. The task's *intent* is unchanged — import the canonical JSON,
+> render headline, trend and cohort table, redeploy on a results commit — but
+> re-read `site/` before following any snippet here. See
+> [the documentation site design](../specs/2026-08-31-docs-site-design.md).
+>
+> | Was | Now |
+> | --- | --- |
+> | `site/vite.config.ts` | `site/astro.config.ts`, under `vite.resolve.alias` |
+> | `site/src/App.tsx` | `site/src/pages/index.astro` |
+> | `site/src/components/Section.tsx` | `<section class="band">` + `src/styles/landing.css` |
+> | `IndexSection.tsx` (React) | prefer `IndexSection.astro` — the trend line and table are static at build time and need no client-side JavaScript |
+>
+> `pages.yml`'s path filter is also no longer one line; add `index/**` to the
+> existing list rather than replacing it.
+
 **Files:**
 
-- Modify: `site/vite.config.ts`
-- Create: `site/src/components/IndexSection.tsx`
-- Modify: `site/src/App.tsx`
+- Modify: `site/astro.config.ts` (was `site/vite.config.ts`)
+- Create: `site/src/components/IndexSection.astro` (was `.tsx`)
+- Modify: `site/src/pages/index.astro` (was `site/src/App.tsx`)
 - Modify: `.github/workflows/pages.yml`
 
 **Interfaces:**

@@ -199,14 +199,23 @@ tool that runs in other people's CI should not drag a tree into it.
 | Lint / format   | ESLint 9 (flat config) + Prettier                             | `format:check` runs in CI                                                  |
 | Docs            | `scripts/gen-rule-docs.mjs`                                   | `docs/rules/*.md` generated from rule JSDoc; CI fails if stale             |
 | Distribution    | npm package (`bin` + `exports`) and a composite GitHub Action | One code path, three front doors                                           |
-| Landing page    | React 19 + Vite + Tailwind 4, in `site/`                      | Its **own** package, deliberately not a workspace — see below              |
+| Website         | Astro 7 + Starlight, in `site/`                               | Its **own** package, deliberately not a workspace — see below              |
 
-The one dependency-heavy corner is the landing page, and it is fenced off on
+The one dependency-heavy corner is the website, and it is fenced off on
 purpose: `site/` has a separate `package.json`, `package-lock.json`, ESLint and
 Prettier config, and is **not** a workspace of the root package. A workspace
-would hoist React into the root lockfile and make "zero runtime dependencies"
-a claim that needed asterisks. It is checked and deployed by its own workflow,
-and the published npm package never sees it.
+would hoist Astro and React into the root lockfile and make "zero runtime
+dependencies" a claim that needed asterisks. It is checked and deployed by its
+own workflow, and the published npm package never sees it.
+
+The site does not keep its own copy of the documentation. A custom Astro
+content loader (`site/src/loaders/repo-docs.ts`) reads `docs/` and the
+published root Markdown **in place**, taking each page's title from its `# H1`,
+and a Sätteri mdast plugin rewrites the relative `.md` links — written for a
+GitHub reader — into site URLs. One file, two renderings: what you read on
+GitHub and what the site serves can never drift, because they are the same
+bytes. `site/src/docs-manifest.ts` is the single map from repository path to
+site route, and both halves read it.
 
 ---
 
@@ -238,9 +247,15 @@ test/
   fixtures/servers/stdio-server.mjs, http-server.mjs
   fixtures/fakebin/               a fake `.cmd` shim, for the Windows spawn tests
 
-site/                  React landing page — its own package, own lockfile
+site/                  Astro + Starlight website — its own package, own lockfile
+  src/loaders/         reads docs/ in place; no copy of the documentation exists
+  src/docs-manifest.ts the one map from repository path to site route
+  src/pages/index.astro  the landing page
 docs/
   ARCHITECTURE.md      this file
+  usage.md             the CLI reference
+  ci.md                the GitHub Action guide
+  faq.md               questions the report tends to raise
   migration-walkthrough.md   a real server taken from 7 findings to READY
   rules/               generated rule pages, one per MCP0NN
 scripts/               the docs generator
@@ -615,10 +630,14 @@ before anything leaves the runner, each of which has caught something real:
    failure as missing auth.
 
 **[pages.yml](../.github/workflows/pages.yml)** — deploys `site/` to GitHub
-Pages on pushes that touch it. It runs the site's **own** lint, format and build
-(the root suite does not cover the site), uses `site/package-lock.json` for its
-cache, and queues concurrent deploys rather than cancelling them so `main`
-always wins. Same OIDC mechanism as publishing.
+Pages. Its path filter covers `docs/**` and the published root Markdown as well
+as `site/**`, because the site renders those files directly: a documentation
+edit has to redeploy the page that shows it. Working documents under
+`docs/superpowers/` are excluded, since they are not published. It runs the
+site's **own** lint, format and build (the root suite does not cover the site),
+uses `site/package-lock.json` for its cache, and queues concurrent deploys
+rather than cancelling them so `main` always wins. Same OIDC mechanism as
+publishing.
 
 **[action.yml](../action.yml)** is a composite action wrapping the CLI. It
 probes **once**, with `--fail-on never`, and uses repeatable `--emit` to render

@@ -151,17 +151,33 @@ upstream release finds nothing to steal and no way to reach the token.
 
 ### Site integration
 
+> **Amended 2026-08-31**, after the site was rebuilt on Astro and Starlight —
+> see [the documentation site design](2026-08-31-docs-site-design.md). The
+> intent below is unchanged; three of the file names are not.
+>
+> - `site/vite.config.ts` no longer exists. The alias moves to
+>   `vite.resolve.alias` inside `site/astro.config.ts`, which Astro passes
+>   through to Vite. Same effect, same reasoning.
+> - `site/src/App.tsx` and `site/src/components/Section.tsx` no longer exist.
+>   The landing page is `site/src/pages/index.astro`, and its sections are
+>   plain `<section class="band">` elements styled by `src/styles/landing.css`.
+>   `IndexSection` should follow that pattern rather than being a React island:
+>   the trend line and cohort table are static at build time and need no
+>   client-side JavaScript.
+> - `pages.yml`'s path filter has since been widened to cover `docs/**` too, so
+>   the change there is to add `index/**` to the existing list rather than to
+>   replace a one-line filter.
+
 `pages.yml` gains `index/**` to its path filter, so a results commit redeploys
 the page.
 
-`site/vite.config.ts` gets a `@index` alias to `../index` (plus
-`server.fs.allow` for dev), so the site imports the canonical JSON rather than a
-duplicated copy.
+The site gets an `@index` alias to `../index` (plus `server.fs.allow` for dev),
+so it imports the canonical JSON rather than a duplicated copy.
 
-New `site/src/components/IndexSection.tsx`: headline stats, a hand-rolled inline
-SVG trend line (no chart library — same reasoning as the hand-rolled ANSI), and
-the cohort table. The table is the accessible source of truth; the chart is
-`aria-hidden` with a one-sentence text summary beside it.
+New `IndexSection`: headline stats, a hand-rolled inline SVG trend line (no
+chart library — same reasoning as the hand-rolled ANSI), and the cohort table.
+The table is the accessible source of truth; the chart is `aria-hidden` with a
+one-sentence text summary beside it.
 
 ## Data contracts
 

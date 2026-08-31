@@ -11,3 +11,4 @@ npm-debug.log*
 # Agent/editor local config.
 .claude/
 site/dist/
+site/.astro/

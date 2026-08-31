@@ -45,7 +45,11 @@ export function repoDocsLoader(): Loader {
 
         const data = await parseData({
           id: slug,
-          data: { title, description: firstParagraph(body) },
+          data: {
+            title,
+            description: firstParagraph(body),
+            ...sidebarFor(slug),
+          },
           filePath: repoPath,
         });
 
@@ -99,12 +103,26 @@ async function collectFiles(logger: LoaderContext['logger']): Promise<string[]> 
   return present;
 }
 
+/**
+ * Rule pages are listed in the sidebar by their id alone.
+ *
+ * Their titles are full sentences — "MCP005 — List results are missing the
+ * required ttlMs and cacheScope fields" — and eighteen of those wrap to three
+ * lines each, burying every other group below a wall of text. The id is also
+ * how a reader arrives: they have a finding in a report that says MCP005, and
+ * they are looking for that, not for a description they have already read.
+ */
+function sidebarFor(slug: string): { sidebar?: { label: string } } {
+  const rule = /^rules\/(mcp\d{3})$/.exec(slug);
+  return rule ? { sidebar: { label: rule[1]!.toUpperCase() } } : {};
+}
+
 /** Takes the first `# H1` as the title and removes it from the body. */
 function splitTitle(raw: string, repoPath: string): { title: string; body: string } {
   const match = /^#[^\S\n]+(.+?)[^\S\n]*$/m.exec(raw);
   if (!match) {
     throw new Error(
-      `repo-docs: ${repoPath} has no level-one heading to use as its title`
+      `repo-docs: ${repoPath} has no level-one heading to use as its title`,
     );
   }
   const body = raw.slice(0, match.index) + raw.slice(match.index + match[0].length);

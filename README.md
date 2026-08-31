@@ -19,6 +19,12 @@ traffic that proves it and the specific change that fixes it.
 npx mcp-stateless --stdio "node dist/server.js"
 ```
 
+**[Documentation](https://khanthtutzin.github.io/mcp-stateless/)** ·
+[Usage](docs/usage.md) ·
+[In CI](docs/ci.md) ·
+[Rules](docs/rules/README.md) ·
+[Questions](docs/faq.md)
+
 </div>
 
 ---
