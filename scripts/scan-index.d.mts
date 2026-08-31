@@ -36,3 +36,30 @@ export interface LocalTarget {
 export type Target = NpmTarget | LocalTarget;
 
 export function loadTargets(text: string, options?: { allowLocal?: boolean }): Target[];
+
+import type { RunReport } from '../src/run.js';
+
+import type { RunSnapshot, TargetResult } from './aggregate-index.d.mts';
+
+/** The slice of the library a probe needs. */
+export interface Lib {
+  runChecks: typeof import('../src/run.js').runChecks;
+  StdioTransport: typeof import('../src/transport/stdio.js').StdioTransport;
+}
+
+export type Probe = (target: Target, opts?: { timeoutMs?: number }) => Promise<RunReport>;
+
+export function createProbe(lib: Lib): Probe;
+
+export function toResult(target: Target, report: RunReport): TargetResult;
+
+export function scanTargets(
+  targets: Target[],
+  opts: {
+    probe: Probe;
+    timeoutMs?: number;
+    toolVersion: string;
+    rulesetSize: number;
+    now?: () => Date;
+  },
+): Promise<RunSnapshot>;

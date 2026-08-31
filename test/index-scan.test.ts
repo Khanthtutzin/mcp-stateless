@@ -2,7 +2,16 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { loadTargets } from '../scripts/scan-index.mjs';
+import { parseRunSnapshot } from '../scripts/aggregate-index.mjs';
+import {
+  createProbe,
+  loadTargets,
+  scanTargets,
+  toResult,
+} from '../scripts/scan-index.mjs';
+import { ALL_RULES } from '../src/rules/index.js';
+import { runChecks } from '../src/run.js';
+import { StdioTransport } from '../src/transport/stdio.js';
 
 const npmTarget = {
   kind: 'npm',
@@ -277,5 +286,254 @@ describe('the committed cohort', () => {
     // asserted explicitly because that is the property that matters.
     const targets = loadTargets(readFileSync(cohortPath, 'utf8'));
     expect(targets.every((t) => t.kind === 'npm')).toBe(true);
+  });
+});
+
+const STDIO_SERVER = fileURLToPath(
+  new URL('./fixtures/servers/stdio-server.mjs', import.meta.url),
+);
+
+function local(id: string, mode: 'legacy' | 'modern') {
+  return {
+    kind: 'local' as const,
+    id,
+    label: id,
+    command: `node "${STDIO_SERVER}" ${mode}`,
+  };
+}
+
+const dead = {
+  kind: 'local' as const,
+  id: 'dead',
+  label: 'dead',
+  command: 'node --eval "process.exit(1)"',
+};
+
+const probe = createProbe({ runChecks, StdioTransport });
+
+const sweep = (targets: unknown[], over: Record<string, unknown> = {}) =>
+  scanTargets(
+    targets as never,
+    {
+      probe,
+      timeoutMs: 5000,
+      toolVersion: '0.0.0-test',
+      rulesetSize: ALL_RULES.length,
+      ...over,
+    } as never,
+  );
+
+describe('scanTargets — verdicts, not evidence', () => {
+  it('records a legacy server as not ready with its failing rules', async () => {
+    const snapshot = await sweep([local('legacy', 'legacy')]);
+
+    expect(snapshot.schemaVersion).toBe(1);
+    expect(snapshot.toolVersion).toBe('0.0.0-test');
+    expect(snapshot.rulesetSize).toBe(ALL_RULES.length);
+    expect(snapshot.results).toHaveLength(1);
+
+    const result = snapshot.results[0]!;
+    expect(result.id).toBe('legacy');
+    expect(result.ready).toBe(false);
+    expect(result.errorCount).toBeGreaterThan(0);
+    expect(result.failedRules).toContain('MCP002');
+    expect(result.unreachable).toBeNull();
+  });
+
+  it('records a compliant server as ready with no failing rules', async () => {
+    const result = (await sweep([local('modern', 'modern')])).results[0]!;
+    expect(result.ready).toBe(true);
+    expect(result.errorCount).toBe(0);
+    expect(result.failedRules).toEqual([]);
+    expect(result.unreachable).toBeNull();
+  });
+
+  it('splits errors by who has to fix them, and the parts sum to the whole', async () => {
+    const result = (await sweep([local('legacy', 'legacy')])).results[0]!;
+    expect(result.sdkErrors + result.applicationErrors).toBe(result.errorCount);
+  });
+
+  it('lists each failing rule once, in id order', async () => {
+    const result = (await sweep([local('legacy', 'legacy')])).results[0]!;
+    expect(result.failedRules).toEqual([...new Set(result.failedRules)]);
+    expect(result.failedRules).toEqual([...result.failedRules].sort());
+  });
+
+  it('stores no evidence, so parseRunSnapshot accepts its own output', async () => {
+    // The aggregator validates against an allow-list and names evidence keys
+    // explicitly. Round-tripping here is what keeps wire traffic — headers,
+    // tokens, request bodies — out of the committed index.
+    const snapshot = await sweep([local('legacy', 'legacy')]);
+    expect(() => parseRunSnapshot(JSON.stringify(snapshot))).not.toThrow();
+  });
+
+  it('stamps scannedAt from the injected clock', async () => {
+    const snapshot = await sweep([local('modern', 'modern')], {
+      now: () => new Date('2026-08-31T00:00:00.000Z'),
+    });
+    expect(snapshot.scannedAt).toBe('2026-08-31T00:00:00.000Z');
+  });
+});
+
+describe('scanTargets — a target that cannot be measured', () => {
+  it('marks a server that never answers as unreachable, not as failing', async () => {
+    // Eighteen conformance failures against a process that exited immediately
+    // would be an artefact of our own failure to connect.
+    const result = (await sweep([dead], { timeoutMs: 2000 })).results[0]!;
+    expect(result.unreachable).toBeTruthy();
+    expect(result.ready).toBe(false);
+    expect(result.errorCount).toBe(0);
+    expect(result.warningCount).toBe(0);
+    expect(result.sdkErrors).toBe(0);
+    expect(result.applicationErrors).toBe(0);
+    expect(result.failedRules).toEqual([]);
+  });
+
+  it('continues the sweep after one target cannot be reached', async () => {
+    const snapshot = await sweep([dead, local('modern', 'modern')], { timeoutMs: 2000 });
+    expect(snapshot.results.map((r) => r.id)).toEqual(['dead', 'modern']);
+    expect(snapshot.results[1]!.ready).toBe(true);
+  });
+
+  it('records a thrown probe as unreachable, saying it was the probe', async () => {
+    const snapshot = await scanTargets(
+      [local('modern', 'modern')] as never,
+      {
+        probe: () => Promise.reject(new Error('spawn ENOENT')),
+        toolVersion: '0.0.0-test',
+        rulesetSize: 1,
+      } as never,
+    );
+    expect(snapshot.results[0]!.unreachable).toBe('probe failed: spawn ENOENT');
+  });
+
+  it('reports a non-Error throw readably rather than as "undefined"', async () => {
+    const snapshot = await scanTargets(
+      [local('modern', 'modern')] as never,
+      {
+        probe: () => Promise.reject('just a string'),
+        toolVersion: '0.0.0-test',
+        rulesetSize: 1,
+      } as never,
+    );
+    expect(snapshot.results[0]!.unreachable).toBe('probe failed: just a string');
+  });
+});
+
+describe('scanTargets — a crashed rule is our bug, not a verdict', () => {
+  it('refuses to produce a snapshot when a rule threw', async () => {
+    const crashingProbe = () =>
+      Promise.resolve({
+        target: 'x',
+        transport: 'stdio',
+        targetRevision: '2026-07-28',
+        startedAt: new Date().toISOString(),
+        durationMs: 1,
+        outcomes: [
+          { rule: { id: 'MCP001' }, findings: [], crashed: 'boom', durationMs: 1 },
+        ],
+        findings: [],
+        errorCount: 0,
+        warningCount: 0,
+        ready: true,
+        diagnostics: [],
+      });
+
+    // Not swallowed as "unreachable": publishing a percentage derived from a
+    // partial run would hide the defect behind a plausible number.
+    await expect(
+      scanTargets(
+        [local('modern', 'modern')] as never,
+        {
+          probe: crashingProbe,
+          toolVersion: '0.0.0-test',
+          rulesetSize: 1,
+        } as never,
+      ),
+    ).rejects.toThrow(/crashed/i);
+  });
+});
+
+describe('createProbe', () => {
+  it('closes the transport even when the run throws', async () => {
+    let closed = 0;
+    class FakeTransport {
+      close() {
+        closed += 1;
+        return Promise.resolve();
+      }
+    }
+    const failing = createProbe({
+      runChecks: () => Promise.reject(new Error('boom')),
+      StdioTransport: FakeTransport,
+    } as never);
+
+    await expect(failing(local('modern', 'modern') as never)).rejects.toThrow('boom');
+    expect(closed).toBe(1);
+  });
+
+  it('refuses an npm target until installation exists', async () => {
+    // Task 5 adds the install step. Until then this must say so rather than
+    // silently spawn something that is not there.
+    await expect(
+      probe({
+        kind: 'npm',
+        id: 'x',
+        label: 'x',
+        package: '@example/server-a',
+        version: '1.2.3',
+        bin: 'server-a',
+        transport: 'stdio',
+      } as never),
+    ).rejects.toThrow(/npm target/i);
+  });
+});
+
+describe('toResult', () => {
+  const reachable = {
+    unreachable: undefined,
+    outcomes: [],
+    findings: [],
+    errorCount: 0,
+    warningCount: 0,
+    ready: true,
+  };
+
+  const warning = {
+    ruleId: 'MCP010',
+    severity: 'warning',
+    remediation: 'sdk',
+  };
+
+  it('counts only errors as blockers, never warnings', () => {
+    // A warning does not block readiness, so a warning in failedRules would
+    // show up on the site as a server that fails a rule it in fact passes.
+    const result = toResult(
+      local('modern', 'modern') as never,
+      {
+        ...reachable,
+        findings: [warning],
+        warningCount: 1,
+      } as never,
+    );
+
+    expect(result.ready).toBe(true);
+    expect(result.warningCount).toBe(1);
+    expect(result.errorCount).toBe(0);
+    expect(result.failedRules).toEqual([]);
+    expect(result.sdkErrors).toBe(0);
+  });
+
+  it('names a local target by its command, and an npm target by its package', () => {
+    expect(
+      toResult(local('modern', 'modern') as never, reachable as never),
+    ).toMatchObject({
+      package: expect.stringContaining('stdio-server.mjs'),
+      version: 'local',
+    });
+    expect(toResult(npmTarget as never, reachable as never)).toMatchObject({
+      package: '@example/server-a',
+      version: '1.2.3',
+    });
   });
 });

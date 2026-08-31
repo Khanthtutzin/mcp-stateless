@@ -236,3 +236,144 @@ export function loadTargets(text, options = {}) {
 
   return raw.targets;
 }
+
+/**
+ * Build a probe function from a library module.
+ *
+ * The library is injected rather than imported so the CLI can probe through the
+ * built `dist/` — the same code path a user gets — while the tests probe through
+ * `src/` with no build step. One implementation either way, and no environment
+ * variable deciding which one runs.
+ */
+export function createProbe(lib) {
+  return async function probe(target, opts = {}) {
+    if (target.kind !== 'local') {
+      // Reaching an npm target means installing it first, which is the next
+      // task. Saying so beats spawning a bin that is not on this machine and
+      // recording the resulting ENOENT as though the server were at fault.
+      throw new Error(
+        `Cannot probe npm target ${JSON.stringify(target.id)} yet: nothing is installed. ` +
+          'Installation is added in the scanner CLI.',
+      );
+    }
+
+    const transport = new lib.StdioTransport(target.command);
+    try {
+      return await lib.runChecks(transport, { timeoutMs: opts.timeoutMs });
+    } finally {
+      // Always: a leaked child process would hold the sweep open, and on a
+      // cohort of servers that is a runner that never finishes.
+      await transport.close();
+    }
+  };
+}
+
+/** A message for anything that was thrown, including things that are not Errors. */
+function describeError(err) {
+  if (err instanceof Error) return err.message;
+  return typeof err === 'string' ? err : JSON.stringify(err);
+}
+
+/** What the index calls this target, and which release it names. */
+function identify(target) {
+  return target.kind === 'npm'
+    ? { package: target.package, version: target.version }
+    : { package: target.command, version: 'local' };
+}
+
+/**
+ * A row for a target that could not be measured.
+ *
+ * Every count is zero rather than absent: the aggregator only ever sums rows
+ * where `unreachable === null`, and a row that mixed a reason with real-looking
+ * counts would be an invitation to read one of them by mistake.
+ */
+function unmeasured(target, reason) {
+  return {
+    id: target.id,
+    ...identify(target),
+    transport: 'stdio',
+    ready: false,
+    errorCount: 0,
+    warningCount: 0,
+    sdkErrors: 0,
+    applicationErrors: 0,
+    failedRules: [],
+    unreachable: reason,
+  };
+}
+
+/**
+ * Reduce a full run report to the verdict row the index publishes.
+ *
+ * Verdicts only. The report carries `evidence` — the wire traffic behind each
+ * finding, headers included — and none of it belongs in a file committed to a
+ * public repository. This function is the narrow point where that is decided,
+ * and `parseRunSnapshot` refuses anything it lets through by mistake.
+ */
+export function toResult(target, report) {
+  const crashed = report.outcomes.filter((outcome) => outcome.crashed);
+  if (crashed.length > 0) {
+    // A crashed rule is a defect in this tool. Publishing a percentage derived
+    // from a partial run would hide it behind a plausible-looking number.
+    throw new Error(
+      `Rule(s) crashed while probing ${JSON.stringify(target.id)}: ` +
+        crashed.map((outcome) => outcome.rule.id).join(', '),
+    );
+  }
+
+  if (report.unreachable) return unmeasured(target, report.unreachable);
+
+  const errors = report.findings.filter((finding) => finding.severity === 'error');
+  return {
+    id: target.id,
+    ...identify(target),
+    transport: 'stdio',
+    ready: report.ready,
+    errorCount: report.errorCount,
+    warningCount: report.warningCount,
+    // The split the whole project exists to make: an SDK upgrade fixes these,
+    // whereas the server's own author has to act on those.
+    sdkErrors: errors.filter((finding) => finding.remediation === 'sdk').length,
+    applicationErrors: errors.filter((finding) => finding.remediation === 'application')
+      .length,
+    failedRules: [...new Set(errors.map((finding) => finding.ruleId))].sort(),
+    unreachable: null,
+  };
+}
+
+/**
+ * Probe every target in order and return one snapshot.
+ *
+ * Sequential on purpose: the cohort is small, and a runner probing several
+ * servers at once produces timings — and timeouts — that nobody can reproduce.
+ */
+export async function scanTargets(targets, opts) {
+  const now = opts.now ?? (() => new Date());
+  const results = [];
+
+  for (const target of targets) {
+    let report;
+    try {
+      report = await opts.probe(target, { timeoutMs: opts.timeoutMs });
+    } catch (err) {
+      // One target's failure never aborts the sweep — the other servers'
+      // verdicts are still worth having. The reason names the probe so a row
+      // caused by our own spawn failure cannot be misread as a server that
+      // went dark.
+      results.push(unmeasured(target, `probe failed: ${describeError(err)}`));
+      continue;
+    }
+    // Deliberately outside the catch: toResult throws only for a crashed rule,
+    // and that must stop the run rather than become another unreachable row.
+    results.push(toResult(target, report));
+  }
+
+  return {
+    schemaVersion: 1,
+    scannedAt: now().toISOString(),
+    toolVersion: opts.toolVersion,
+    rulesetSize: opts.rulesetSize,
+    results,
+  };
+}
