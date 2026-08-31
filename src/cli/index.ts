@@ -300,6 +300,10 @@ export async function main(argv: string[]): Promise<number> {
     // A server we could not reach is an operational failure, not a conformance
     // verdict, so it gets the usage exit code rather than the findings one.
     if (report.unreachable) return EXIT_USAGE;
+    // A probe that lost some of its answers is not a verdict either, whatever
+    // --fail-on says: an empty findings list from a server that stopped talking
+    // would otherwise exit 0 under a report that reads INCOMPLETE.
+    if (report.incomplete) return EXIT_USAGE;
     // Same reasoning for an artefact a CI job asked for and did not get.
     if (emitFailed) return EXIT_USAGE;
     if (failOn === 'never') return EXIT_OK;

@@ -107,15 +107,22 @@ Files never receive ANSI escapes, whatever the terminal supports. A malformed
 
 ## Exit codes
 
-| Code | Meaning |
-| ---- | ------- |
-| `0` | Ready — no findings at or above `--fail-on` |
-| `1` | Findings at or above `--fail-on` |
-| `2` | Usage error, unreachable server, or an `--emit` file that could not be written |
+| Code | Meaning                                                                                             |
+| ---- | --------------------------------------------------------------------------------------------------- |
+| `0`  | Ready — no findings at or above `--fail-on`                                                         |
+| `1`  | Findings at or above `--fail-on`                                                                    |
+| `2`  | Usage error, unreachable server, an incomplete probe, or an `--emit` file that could not be written |
 
 `--fail-on` moves the line between `0` and `1`: `error` (the default) fails only
-on breaking findings, `warning` also fails on advisories, and `never` always
-exits `0` so you can collect a report without failing a build.
+on breaking findings, `warning` also fails on advisories, and `never` exits `0`
+whatever the findings, so you can collect a report without failing a build.
+
+`--fail-on` does not cover `2`, and that is deliberate. It decides which
+_findings_ should fail your build; it says nothing about a probe that never
+finished. If the server dies or stops answering partway through, the report is
+marked **INCOMPLETE** and the exit code is `2` even under `--fail-on never` —
+because the checks that went unanswered reported nothing either way, and an
+empty findings list from a server that stopped talking is not a pass.
 
 Emitted files are written **after** the primary output, deliberately. A path
 typo in a CI config should cost you the artefact, not the diagnostic output you
@@ -145,7 +152,7 @@ await transport.close();
 
 for (const finding of report.findings) {
   console.log(
-    `${finding.ruleId} ${finding.severity} [${finding.remediation}] ${finding.title}`
+    `${finding.ruleId} ${finding.severity} [${finding.remediation}] ${finding.title}`,
   );
 }
 ```

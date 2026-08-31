@@ -512,8 +512,32 @@ on Windows, which CI caught and a local run never would.
 | `markdown` | For a PR comment or `$GITHUB_STEP_SUMMARY`.                                                                                                                                                              |
 
 **Exit codes:** `0` ready · `1` findings at or above `--fail-on` · `2` usage
-error or unreachable server. Keeping unreachable at `2` matters: a broken launch
-should never be mistaken for a conformance verdict.
+error, unreachable server, or a probe that could not be completed. Keeping those
+last two at `2` matters: a broken launch should never be mistaken for a
+conformance verdict.
+
+### Three states, not two
+
+A run ends in one of three states, and conflating any two of them produces a
+number that reads as a verdict and is not one.
+
+| State         | What happened                             | How it is reported                      |
+| ------------- | ----------------------------------------- | --------------------------------------- |
+| measured      | every probe got an answer                 | findings, `ready`, exit `0` or `1`      |
+| `unreachable` | **no** probe got an answer                | no checks run, exit `2`                 |
+| `incomplete`  | some probes got answers and some got none | findings shown, never `ready`, exit `2` |
+
+The middle state was always handled. The third was not, and the gap was not
+theoretical: every rule treats an unanswered probe as telling it nothing and
+reports no finding — correct for the rule, wrong for the run. A server that
+answered the first probe correctly and then exited therefore came back with zero
+errors and `ready: true`, a green verdict drawn from roughly one rule in
+eighteen. `RunReport.incomplete` now records how many probes went unanswered and
+why, no run carrying it is ever `ready`, and the compliance index files such a
+target as not measurable rather than as passing.
+
+JSON consumers get an `incomplete` object alongside `unreachable`; anything
+reading `ready: false` as "has findings" should check it first.
 
 ---
 

@@ -15,6 +15,10 @@ function target(mode: 'legacy' | 'modern'): string {
   return `node "${STDIO_SERVER}" ${mode}`;
 }
 
+const DIES_AFTER = fileURLToPath(
+  new URL('./fixtures/servers/dies-after.mjs', import.meta.url),
+);
+
 let workdir: string;
 let stdout: string;
 let stderr: string;
@@ -224,5 +228,44 @@ describe('exit codes and usage', () => {
     expect(code).toBe(0);
     expect(stdout).toContain('MCP001');
     expect(stdout).toContain('MCP018');
+  });
+});
+
+describe('a probe we could not finish', () => {
+  // A server that answers correctly and then exits. Every rule treats an
+  // unanswered probe as telling it nothing, so the findings list comes back
+  // empty — which used to mean exit 0 under a report saying INCOMPLETE.
+  const dying = `node "${DIES_AFTER}" 2 exit`;
+
+  it('exits 2, the code for "no verdict", not 0', async () => {
+    const code = await main(['--stdio', dying, '--timeout', '500', '--no-color']);
+    expect(code).toBe(2);
+  });
+
+  it('says so on stdout rather than claiming readiness', async () => {
+    await main(['--stdio', dying, '--timeout', '500', '--no-color']);
+    expect(stdout).toContain('INCOMPLETE');
+    expect(stdout).not.toContain('READY');
+  });
+
+  it('keeps exiting 2 even when the user asked not to fail on findings', async () => {
+    // --fail-on never opts out of conformance findings. It does not opt out of
+    // being told the probe did not complete.
+    const code = await main([
+      '--stdio',
+      dying,
+      '--timeout',
+      '500',
+      '--no-color',
+      '--fail-on',
+      'never',
+    ]);
+    expect(code).toBe(2);
+  });
+
+  it('still exits 0 for a server that answers everything', async () => {
+    const code = await main(['--stdio', target('modern'), '--no-color']);
+    expect(code).toBe(0);
+    expect(stdout).not.toContain('INCOMPLETE');
   });
 });

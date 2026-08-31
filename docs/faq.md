@@ -97,8 +97,13 @@ should not quietly reduce your coverage. `--list-rules` prints the catalogue.
 ## Which exit code means what?
 
 `0` ready, `1` findings at or above `--fail-on`, `2` usage error, unreachable
-server, or an `--emit` file that could not be written. [Usage](usage.md) has
-the detail.
+server, an incomplete probe, or an `--emit` file that could not be written.
+[Usage](usage.md) has the detail.
+
+`2` covers everything that is not a conformance verdict. A server that never
+answered, and a server that answered some probes and then stopped, both land
+there: with part of the ruleset unanswered there is nothing to certify, and
+reporting zero findings would read as a pass.
 
 ## Is this an official MCP project?
 

@@ -48,28 +48,28 @@ server, it does not compile it.
 
 ## Inputs
 
-| Input | Default | Description |
-| ----- | ------- | ----------- |
-| `stdio` | — | Command that starts the server on stdio. Mutually exclusive with `http`. |
-| `http` | — | Streamable HTTP endpoint. Mutually exclusive with `stdio`. |
-| `header` | — | Extra HTTP header as `Name: value`. One per line for several. |
-| `format` | `text` | `text`, `json`, `sarif` or `markdown`. |
-| `output` | — | Write the report to this file instead of stdout. |
-| `fail-on` | `error` | Fail the step on `error`, `warning`, or `never`. |
-| `only` | — | Comma-separated rule ids to run exclusively. |
-| `skip` | — | Comma-separated rule ids to skip. |
-| `timeout` | — | Per-request timeout in milliseconds. |
-| `verbose` | `false` | Include the JSON-RPC traffic behind each finding. |
-| `summary` | `true` | Append a markdown report to the GitHub step summary. |
-| `version` | the release's own | npm version of `mcp-stateless` to run. |
+| Input     | Default           | Description                                                              |
+| --------- | ----------------- | ------------------------------------------------------------------------ |
+| `stdio`   | —                 | Command that starts the server on stdio. Mutually exclusive with `http`. |
+| `http`    | —                 | Streamable HTTP endpoint. Mutually exclusive with `stdio`.               |
+| `header`  | —                 | Extra HTTP header as `Name: value`. One per line for several.            |
+| `format`  | `text`            | `text`, `json`, `sarif` or `markdown`.                                   |
+| `output`  | —                 | Write the report to this file instead of stdout.                         |
+| `fail-on` | `error`           | Fail the step on `error`, `warning`, or `never`.                         |
+| `only`    | —                 | Comma-separated rule ids to run exclusively.                             |
+| `skip`    | —                 | Comma-separated rule ids to skip.                                        |
+| `timeout` | —                 | Per-request timeout in milliseconds.                                     |
+| `verbose` | `false`           | Include the JSON-RPC traffic behind each finding.                        |
+| `summary` | `true`            | Append a markdown report to the GitHub step summary.                     |
+| `version` | the release's own | npm version of `mcp-stateless` to run.                                   |
 
 ## Outputs
 
-| Output | Description |
-| ------ | ----------- |
-| `ready` | `"true"` when no breaking issues were found |
-| `errors` | Number of breaking findings |
-| `warnings` | Number of advisory findings |
+| Output     | Description                                 |
+| ---------- | ------------------------------------------- |
+| `ready`    | `"true"` when no breaking issues were found |
+| `errors`   | Number of breaking findings                 |
+| `warnings` | Number of advisory findings                 |
 
 The three outputs and the printed report all come from **one probe**. That is
 worth stating because it was once not true: the action used to invoke the
@@ -125,8 +125,8 @@ exit codes are the whole contract:
 npx mcp-stateless --stdio "node dist/server.js" --emit sarif:report.sarif
 ```
 
-`0` ready, `1` findings, `2` usage error or unreachable server. See
-[Usage](usage.md) for the full set of flags.
+`0` ready, `1` findings, `2` usage error, unreachable server, or a probe that
+could not be completed. See [Usage](usage.md) for the full set of flags.
 
 ## Choosing a threshold
 

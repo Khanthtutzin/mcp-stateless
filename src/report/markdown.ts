@@ -21,11 +21,20 @@ export function renderMarkdown(report: RunReport): string {
     return lines.join('\n');
   }
 
-  lines.push(
-    report.ready
-      ? `**Ready.** No breaking issues across ${report.outcomes.length} checks.`
-      : `**Not ready.** ${errors.length} breaking issue${errors.length === 1 ? '' : 's'} across ${report.outcomes.length} checks.`,
-  );
+  if (report.incomplete) {
+    const { failed, probes, reason } = report.incomplete;
+    lines.push(
+      `**Incomplete.** ${failed} of ${probes} probes got no answer, so this is not a verdict.`,
+    );
+    lines.push('');
+    lines.push(`First failure: ${reason}`);
+  } else {
+    lines.push(
+      report.ready
+        ? `**Ready.** No breaking issues across ${report.outcomes.length} checks.`
+        : `**Not ready.** ${errors.length} breaking issue${errors.length === 1 ? '' : 's'} across ${report.outcomes.length} checks.`,
+    );
+  }
   lines.push('');
   lines.push(`\`${report.target}\` · ${report.transport} · ${report.durationMs}ms`);
   lines.push('');

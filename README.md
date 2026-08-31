@@ -68,8 +68,8 @@ npx mcp-stateless --http https://api.example.com/mcp
 npx mcp-stateless --http https://api.example.com/mcp --header "Authorization: Bearer $TOKEN"
 ```
 
-Exit `0` ready · `1` findings · `2` usage error, unreachable server, or an
-`--emit` file that could not be written.
+Exit `0` ready · `1` findings · `2` usage error, unreachable server, an
+incomplete probe, or an `--emit` file that could not be written.
 
 Every release is published from CI by npm
 [trusted publishing](https://docs.npmjs.com/trusted-publishers/), so each
