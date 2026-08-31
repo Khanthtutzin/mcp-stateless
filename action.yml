@@ -44,6 +44,11 @@ inputs:
     description: 'Append a markdown report to the GitHub step summary.'
     required: false
     default: 'true'
+  version:
+    description: >
+      npm version of mcp-stateless to run. Defaults to the version this action
+      release was built against, so the action ref pins the checker too.
+    required: false
 
 outputs:
   ready:
@@ -74,6 +79,7 @@ runs:
         INPUT_TIMEOUT: ${{ inputs.timeout }}
         INPUT_VERBOSE: ${{ inputs.verbose }}
         INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
 
@@ -99,11 +105,33 @@ runs:
         if [ -n "$INPUT_TIMEOUT" ]; then args+=(--timeout "$INPUT_TIMEOUT"); fi
         if [ "$INPUT_VERBOSE" = "true" ]; then args+=(--verbose); fi
 
-        # Always produce JSON for the step outputs, separately from whatever
-        # the user asked to see.
+        # Pin the CLI to the version this action release was built against, so
+        # `uses: …@v1` cannot silently start running a different checker than
+        # the one the action ref was tested with. The `version` input overrides.
+        if [ -n "$INPUT_VERSION" ]; then
+          pinned="$INPUT_VERSION"
+        else
+          pinned="$(node -p "require('$GITHUB_ACTION_PATH/package.json').version")"
+        fi
+        echo "Using mcp-stateless@$pinned"
+
         json_file="$(mktemp)"
+        md_file="$(mktemp)"
+
+        display=(--format "$INPUT_FORMAT")
+        if [ -n "$INPUT_OUTPUT" ]; then display+=(--output "$INPUT_OUTPUT"); fi
+
+        # ONE probe, several renderings. --emit writes each format from the same
+        # run, so the JSON that feeds the step outputs cannot disagree with the
+        # text a human reads or the summary posted to the job page. Probing three
+        # times, as this action used to, could report three different verdicts
+        # against a flaky server.
         set +e
-        npx --yes mcp-stateless "${args[@]}" --format json --output "$json_file" --fail-on never
+        npx --yes "mcp-stateless@$pinned" "${args[@]}" \
+          "${display[@]}" \
+          --emit "json:$json_file" \
+          --emit "markdown:$md_file" \
+          --fail-on never
         probe_status=$?
         set -e
 
@@ -120,14 +148,8 @@ runs:
         echo "errors=$errors" >> "$GITHUB_OUTPUT"
         echo "warnings=$warnings" >> "$GITHUB_OUTPUT"
 
-        # Now render what the user actually asked for.
-        display=(--format "$INPUT_FORMAT" --fail-on never)
-        if [ -n "$INPUT_OUTPUT" ]; then display+=(--output "$INPUT_OUTPUT"); fi
-        npx --yes mcp-stateless "${args[@]}" "${display[@]}"
-
         if [ "$INPUT_SUMMARY" = "true" ]; then
-          npx --yes mcp-stateless "${args[@]}" --format markdown --fail-on never \
-            >> "$GITHUB_STEP_SUMMARY"
+          cat "$md_file" >> "$GITHUB_STEP_SUMMARY"
         fi
 
         case "$INPUT_FAIL_ON" in

@@ -11,6 +11,35 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+### Added
+
+- `--emit <format>:<file>`, repeatable. One probe renders any number of formats,
+  so a CI job can have text on stdout, JSON for its outputs and SARIF for upload
+  without probing the server three times. Files never receive ANSI escapes, and
+  a malformed `--emit` fails before anything is spawned.
+- `version` input on the GitHub Action, and the action now pins the CLI to the
+  npm version it was released with. Previously `uses: …@v1` pinned the action
+  but ran whatever npm considered latest.
+- `test/cli.test.ts` — the CLI had no test coverage at all. Covers `--emit`,
+  exit codes, `--fail-on never`, unknown rule ids and `--list-rules`.
+
+### Changed
+
+- The Action probes **once** instead of three times. The JSON feeding
+  `ready`/`errors`/`warnings` is now rendered from the same run as the text the
+  user reads and the markdown posted to the step summary; against a flaky server
+  those three could previously disagree.
+- Release workflow maintains a moving major tag (`v1`) from 1.0.0 onward,
+  excluding prereleases. Documented action examples pin an exact release until
+  then, because `@v1` did not exist.
+
+### Documentation
+
+- An explicit statement of non-affiliation with the MCP project and Anthropic.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — a project guide covering the
+  stack, the layer boundaries, the probe sequence, the workflows, and the
+  questions a newcomer actually asks.
+
 ## [0.1.5] — 2026-08-18
 
 First release published entirely by CI. No version-visible changes: cut to

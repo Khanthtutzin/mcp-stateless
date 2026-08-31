@@ -62,7 +62,8 @@ npx mcp-stateless --http https://api.example.com/mcp
 npx mcp-stateless --http https://api.example.com/mcp --header "Authorization: Bearer $TOKEN"
 ```
 
-Exit `0` ready · `1` findings · `2` usage error or unreachable server.
+Exit `0` ready · `1` findings · `2` usage error, unreachable server, or an
+`--emit` file that could not be written.
 
 Every release is published from CI by npm
 [trusted publishing](https://docs.npmjs.com/trusted-publishers/), so each
@@ -229,11 +230,16 @@ envelope, not your logic.
 ## In CI
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v1
+- uses: Khanthtutzin/mcp-stateless@v0.1.5
   with:
     stdio: node dist/server.js
     fail-on: error
 ```
+
+The action ref pins the checker: it runs the npm version it was released with,
+not whatever is latest. Override with the `version` input if you need to.
+A moving `v1` tag will exist from 1.0.0 onward — until then, pin the exact
+release as above.
 
 Or upload SARIF so findings appear in the Security tab and inline on pull
 requests:
@@ -259,6 +265,7 @@ requests:
 
 --format <fmt>        text (default), json, sarif, markdown.
 --output <file>       Write the report to a file instead of stdout.
+--emit <fmt>:<file>   Also write this format to this file. Repeatable.
 --verbose             Include the JSON-RPC traffic behind each finding.
 --no-color            Disable ANSI colour (NO_COLOR is honoured too).
 
@@ -336,6 +343,16 @@ in specific ways. No mocks.
 git clone https://github.com/Khanthtutzin/mcp-stateless.git
 cd mcp-stateless && npm install && npm test
 ```
+
+## Affiliation
+
+An independent open-source project. Not affiliated with, endorsed by, or an
+official part of the Model Context Protocol project or Anthropic. "Model Context
+Protocol" and MCP are used only to describe what this tool checks against.
+
+Findings reported about any third-party server describe that server's observable
+protocol behaviour at a point in time, nothing more — and every one of them is
+reproducible with a single command, printed alongside the finding.
 
 ## License
 
