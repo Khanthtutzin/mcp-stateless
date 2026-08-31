@@ -15,6 +15,29 @@
  * search engines still get a level-one heading, and the hero's `h2` follows it
  * in the right order.
  */
+/**
+ * The landing's ground is ruled rather than flat.
+ *
+ * It is a grid because that is what the subject is: a protocol revision is a
+ * table of required fields, and the report in the hero is a table of which ones
+ * a server got wrong. Faint enough to register only once you look for it, and
+ * fixed to the viewport so it never seams or drifts as the page scrolls.
+ *
+ * The documentation pages deliberately do not get it. This is the page you
+ * arrive on; those are the pages you read on, and a ruled ground behind three
+ * thousand words of prose is texture nobody asked for.
+ *
+ * It tiles with the document rather than being fixed to the viewport: a fixed
+ * attachment is unreliable on mobile browsers, and a ground that stays put
+ * while the page slides over it draws attention to itself.
+ */
+body:has(.landing-page) {
+  background-image:
+    linear-gradient(to right, var(--grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
 body:has(.landing-page) .content-panel:first-of-type {
   border: 0;
   padding-block: 0;
@@ -72,7 +95,30 @@ body:has(.landing-page) h1#_top {
 /* ── Hero ──────────────────────────────────────────────────────────────── */
 
 .hero {
+  position: relative;
   padding-block: clamp(2.5rem, 6vw, 4.5rem) clamp(3rem, 7vw, 5rem);
+}
+
+/**
+ * A glow behind the hero, bleeding to the viewport edges and dissolving before
+ * the first section rule. It sits on top of the ruled ground below and marks
+ * where the page starts, without becoming a second thing to look at.
+ */
+.hero::before {
+  content: '';
+  position: absolute;
+  top: -7rem;
+  bottom: 0;
+  left: 50%;
+  width: 100vw;
+  transform: translateX(-50%);
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(
+    ellipse 60% 55% at 50% 15%,
+    var(--glow),
+    transparent 70%
+  );
 }
 
 /**

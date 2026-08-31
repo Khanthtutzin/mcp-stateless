@@ -34,6 +34,11 @@
   --break-wash: #ff6b5b1f;
   --ready-wash: #5ce08a1f;
   --advisory-wash: #ffc24b1f;
+
+  /* The hero's ruled ground. Faint enough to read as paper rather than as a
+     pattern — it should register only once you look for it. */
+  --grid: #ffffff12;
+  --glow: #8fb4ff1f;
 }
 
 /**
@@ -56,6 +61,9 @@
   --break-wash: #c22d1c14;
   --ready-wash: #0d6b4614;
   --advisory-wash: #85520014;
+
+  --grid: #10141f14;
+  --glow: #2b52c714;
 }
 
 /* Starlight's own tokens, pointed at the palette above so every built-in
