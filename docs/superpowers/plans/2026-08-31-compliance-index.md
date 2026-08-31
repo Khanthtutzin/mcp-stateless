@@ -1329,7 +1329,7 @@ review. Four deviations from the steps above:
 - `installTarget(target: NpmTarget, dir: string, run?): void`
 - CLI: `node scripts/scan-index.mjs [--targets <file>] [--out <file>] [--allow-local] [--timeout <ms>]`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 First create the fixture. `test/fixtures/fake-package/node_modules/@example/server-a/package.json`:
 
@@ -1375,12 +1375,12 @@ describe('resolveNpmBin', () => {
 });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `npx vitest run test/index-scan.test.ts`
 Expected: FAIL — `resolveNpmBin is not a function`.
 
-- [ ] **Step 3: Write the minimal implementation**
+- [x] **Step 3: Write the minimal implementation**
 
 Append to `scripts/scan-index.mjs`:
 
@@ -1549,12 +1549,12 @@ Add to `package.json` `scripts`, next to `index:aggregate`:
 "index:scan": "node scripts/scan-index.mjs",
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `npx vitest run test/index-scan.test.ts`
 Expected: PASS, 19 tests.
 
-- [ ] **Step 5: Verify the real scan by hand (needs network)**
+- [x] **Step 5: Verify the real scan by hand (needs network)**
 
 ```bash
 npm run build
@@ -1565,7 +1565,7 @@ node scripts/aggregate-index.mjs --snapshot index/runs/manual-check.json --histo
 Expected: the scan prints a `Wrote …` line naming four targets, and the snapshot contains four results. Inspect one result and confirm it carries **no** `evidence` key.
 Then discard the scratch output: `rm index/runs/manual-check.json`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 npx prettier --write scripts/scan-index.mjs scripts/scan-index.d.mts test/index-scan.test.ts package.json
@@ -1574,6 +1574,61 @@ git commit -m "feat(index): install pinned npm targets and add the scanner CLI"
 ```
 
 ---
+
+#### Amendment (2026-08-31): what changed during implementation
+
+Six deviations, five of them forced by something the steps above got wrong.
+
+1. **The committed fixture would have been invisible.** `.gitignore` excludes
+   `node_modules/` at every level, so
+   `test/fixtures/fake-package/node_modules/@example/server-a/` would have been
+   absent in CI while passing locally. Install trees are built into a temp
+   directory in `beforeAll` instead, which also makes a hostile manifest a
+   two-line variant rather than another committed package.
+2. **`npm` cannot be spawned by name on Windows.** The first real scan failed
+   on all four targets with `spawnSync npm.cmd EINVAL`: npm is a batch shim,
+   and since the fix for CVE-2024-27980 Node refuses to spawn a `.cmd`
+   directly. The plan's note that `planSpawn` was "simpler not to reuse" was
+   right about the _bin_ and wrong about the _install_. `planSpawn` is now
+   exported from `src/index.ts` — the scanner is its second consumer, and the
+   alternative was a second copy of CVE handling in a script — and
+   `installTarget` takes it as an option.
+3. **The CLI needs `--lib`.** CI runs `npm test` before `npm run build` and
+   `dist/` is gitignored, so a test that hard-coded `dist/` fails on a clean
+   checkout. The default is still `../dist/index.js`, so the CLI probes what a
+   user installs; the test builds on demand and passes `--lib`.
+4. **`isDirectInvocation()`, not `import.meta.url === \`file://\${process.argv[1]}\``.**
+   The plan reproduced the bug that silently no-opped Task 2's CLI on Windows.
+   Five spawn-based tests now cover the CLI, because that is the only kind that
+   would have caught it.
+5. **A per-target wall-clock budget** (`--budget`, default 120 s). A
+   per-request timeout applies once per probe, so a server that accepts a
+   connection and answers nothing costs it about twenty times over.
+6. **`--allow-local` requires `--out`.** It may not write into
+   `index/runs/`, where a `local:<id>` row would look like published data.
+
+**A library bug the budget exposed.** `StdioTransport.send` caught write
+failures synchronously, but a write to an ended pipe fails _asynchronously_ —
+so closing a transport while a run was still in flight produced an uncaught
+`write after end` and took the process down. Any caller with a timeout could
+hit it. Fixed with a `stdin` error listener and a writability check, covered by
+`test/close-during-run.test.ts`.
+
+**A verification bug of my own, worth recording.** The mutation harness reported
+17 of 18 guards caught while its own baseline was already failing: one of my new
+tests asserted a directory was gone by spawning `node -e statSync`, whose crash
+reached vitest as an unhandled error and made the run exit non-zero. Every
+mutant therefore read as CAUGHT. I had been grepping stdout for "Tests" and
+never checking the exit code. The harness now refuses to run unless the baseline
+is green, and re-running it found **two genuinely unpinned guards** —
+prototype lookups in the `bin` map, and the atomic write — both now covered.
+
+**Verified by hand against the real cohort** (`npm run build` then a scan with
+`--timeout 30000`): four of four measurable, 0/4 ready, 33 breaking findings,
+**every one of them `sdk` and none `application`** — the project's thesis in
+real numbers. The snapshot contains exactly the eleven allowed keys and no
+occurrence of `evidence`, `requestHeaders`, `authorization` or `Bearer`.
+Aggregating it produced a history row of `0/4 ready (median 8 breaking)`.
 
 ### Task 6: The weekly workflow
 

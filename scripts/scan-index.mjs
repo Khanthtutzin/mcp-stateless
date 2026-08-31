@@ -1,3 +1,9 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 /**
  * Probe the curated compliance-index cohort.
  *
@@ -237,6 +243,142 @@ export function loadTargets(text, options = {}) {
   return raw.targets;
 }
 
+// --- Installing a pinned target --------------------------------------------
+
+/**
+ * Find the JS entry point for a package's declared bin.
+ *
+ * Resolved from the manifest rather than from `node_modules/.bin`, so the
+ * server is spawned as `node <file>` and no platform shim is involved. The
+ * repository already has hard-won code for Windows batch shims in
+ * src/transport/spawn-plan.ts; not needing it here is simpler than reusing it.
+ *
+ * **The manifest is third-party input.** `binName` is pinned by a reviewer in
+ * index/targets.json, but the path it maps to comes from the package that was
+ * just downloaded — so `"bin": {"x": "../../../../evil.js"}` would otherwise
+ * hand us a path outside the install directory to execute. Validating the name
+ * upstream does nothing about that; containment has to be checked here, where
+ * the join happens.
+ */
+export function resolveNpmBin(installDir, pkg, binName) {
+  const packageDir = join(installDir, 'node_modules', ...pkg.split('/'));
+  const manifestPath = join(packageDir, 'package.json');
+
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  } catch (err) {
+    throw new Error(`Could not read the manifest for ${pkg}: ${err.message}`);
+  }
+
+  const bin = manifest?.bin;
+  let declared;
+  if (typeof bin === 'string') {
+    // The string form names no bin at all, so npm uses the package's last
+    // segment. Accepting it for any requested name would mean the pinned name
+    // was never compared against what actually runs.
+    const implied = pkg.startsWith('@') ? pkg.slice(pkg.indexOf('/') + 1) : pkg;
+    if (implied !== binName) {
+      throw new Error(
+        `${pkg} declares a single unnamed bin, which npm installs as ${JSON.stringify(implied)}, ` +
+          `but the cohort pins ${JSON.stringify(binName)}. Update the cohort or the package.`,
+      );
+    }
+    declared = bin;
+  } else if (bin !== null && typeof bin === 'object' && !Array.isArray(bin)) {
+    if (!Object.hasOwn(bin, binName)) {
+      throw new Error(
+        `${pkg} declares no bin named ${JSON.stringify(binName)}. ` +
+          `Declared: ${Object.keys(bin).join(', ') || '(none)'}`,
+      );
+    }
+    declared = bin[binName];
+  } else {
+    throw new Error(
+      `${pkg} declares no bin named ${JSON.stringify(binName)}. Declared: (none)`,
+    );
+  }
+
+  if (typeof declared !== 'string' || declared.length === 0) {
+    throw new Error(
+      `${pkg} bin ${JSON.stringify(binName)} must be a path string, got ${JSON.stringify(declared)}.`,
+    );
+  }
+
+  // Containment. Compare resolved paths: `relative` starting with `..`, or
+  // being absolute, both mean the target escaped. An absolute `declared` makes
+  // `join` discard packageDir entirely, which this also catches.
+  const entry = resolve(packageDir, declared);
+  const inside = relative(resolve(packageDir), entry);
+  if (inside === '' || inside.startsWith('..') || inside.split(sep).includes('..')) {
+    throw new Error(
+      `${pkg} bin ${JSON.stringify(binName)} resolves outside the package directory ` +
+        `(${JSON.stringify(declared)}). Refusing to execute it.`,
+    );
+  }
+
+  if (!existsSync(entry)) {
+    throw new Error(
+      `${pkg} bin ${JSON.stringify(binName)} points at ${JSON.stringify(declared)}, which does not exist.`,
+    );
+  }
+
+  return entry;
+}
+
+/**
+ * Install one pinned target into its own directory.
+ *
+ * `--ignore-scripts` is not negotiable: install scripts are the classic
+ * supply-chain vector, and a server that cannot start without one is out of
+ * scope for the index. The version is re-checked here because this function
+ * takes a name and a version and hands them straight to a network install —
+ * `loadTargets` is the boundary, but a boundary one call site can bypass is
+ * not much of a boundary.
+ */
+export function installTarget(target, dir, options = {}) {
+  const run = options.run ?? execFileSync;
+
+  if (!isPackageName(target.package)) {
+    throw new Error(
+      `Refusing to install ${JSON.stringify(target.package)}: not a plain package name.`,
+    );
+  }
+  if (!isExactVersion(target.version)) {
+    throw new Error(
+      `Refusing to install ${target.package}@${target.version}: not an exact version.`,
+    );
+  }
+
+  const argv = [
+    'npm',
+    'install',
+    '--no-save',
+    '--no-audit',
+    '--no-fund',
+    '--ignore-scripts',
+    '--prefix',
+    dir,
+    `${target.package}@${target.version}`,
+  ];
+
+  // On Windows `npm` is a batch shim, and since the fix for CVE-2024-27980
+  // Node refuses to spawn a .cmd directly — the first real scan failed with
+  // `spawnSync npm.cmd EINVAL` on all four targets. `planSpawn` is the
+  // library's existing answer: resolve the executable ourselves via PATHEXT
+  // and, for a shim, invoke cmd.exe with a command line we quote. Not
+  // `shell: true`, which would reinterpret metacharacters.
+  const plan = options.planSpawn
+    ? options.planSpawn(argv)
+    : { file: argv[0], args: argv.slice(1), windowsVerbatimArguments: false };
+
+  run(plan.file, plan.args, {
+    stdio: 'pipe',
+    encoding: 'utf8',
+    windowsVerbatimArguments: plan.windowsVerbatimArguments,
+  });
+}
+
 /**
  * Build a probe function from a library module.
  *
@@ -246,15 +388,27 @@ export function loadTargets(text, options = {}) {
  * variable deciding which one runs.
  */
 export function createProbe(lib) {
+  const install = lib.install ?? installTarget;
+
   return async function probe(target, opts = {}) {
-    if (target.kind !== 'local') {
-      // Reaching an npm target means installing it first, which is the next
-      // task. Saying so beats spawning a bin that is not on this machine and
-      // recording the resulting ENOENT as though the server were at fault.
-      throw new Error(
-        `Cannot probe npm target ${JSON.stringify(target.id)} yet: nothing is installed. ` +
-          'Installation is added in the scanner CLI.',
-      );
+    let command;
+    let cleanup = () => {};
+
+    if (target.kind === 'local') {
+      command = target.command;
+    } else {
+      // Its own directory, removed afterwards whatever happens. Sharing one
+      // would let two targets' dependency trees decide each other's versions,
+      // and the point of the exercise is that each row names the code that ran.
+      const dir = mkdtempSync(join(tmpdir(), `mcp-index-${target.id}-`));
+      cleanup = () => rmSync(dir, { recursive: true, force: true });
+      try {
+        install(target, dir, { planSpawn: lib.planSpawn });
+        command = `node "${resolveNpmBin(dir, target.package, target.bin)}"`;
+      } catch (err) {
+        cleanup();
+        throw err;
+      }
     }
 
     // Parse argv before constructing the transport. Inside the transport an
@@ -264,26 +418,63 @@ export function createProbe(lib) {
     // to us and says nothing about the server.
     let argv;
     try {
-      argv = lib.tokenizeCommand(target.command);
+      argv = lib.tokenizeCommand(command);
     } catch {
+      cleanup();
       throw new Error(
         `command for ${JSON.stringify(target.id)} could not be parsed as argv ` +
           '(unbalanced quoting). The command is omitted here because it can carry credentials.',
       );
     }
     if (argv.length === 0) {
+      cleanup();
       throw new Error(`command for ${JSON.stringify(target.id)} is empty.`);
     }
 
-    const transport = new lib.StdioTransport(target.command);
+    const transport = new lib.StdioTransport(command);
     try {
-      return await lib.runChecks(transport, { timeoutMs: opts.timeoutMs });
+      return await withBudget(
+        lib.runChecks(transport, { timeoutMs: opts.timeoutMs }),
+        opts.budgetMs,
+        target,
+      );
     } finally {
       // Always: a leaked child process would hold the sweep open, and on a
       // cohort of servers that is a runner that never finishes.
       await transport.close();
+      cleanup();
     }
   };
+}
+
+/**
+ * Fail a target that outlasts its wall-clock budget.
+ *
+ * A per-request timeout is not a ceiling on a run: it applies once per probe,
+ * so a server that accepts a connection and answers nothing costs the timeout
+ * roughly twenty times over. On a weekly cron across a growing cohort that is
+ * the difference between a run that finishes and one that is cancelled.
+ *
+ * Closing the transport in the caller's `finally` is what actually stops the
+ * abandoned run: it fails every pending request immediately.
+ */
+function withBudget(work, budgetMs, target) {
+  if (!budgetMs) return work;
+
+  let timer;
+  const expired = new Promise((_resolve, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new Error(
+            `exceeded the ${budgetMs}ms budget for ${JSON.stringify(target.id)} before finishing.`,
+          ),
+        ),
+      budgetMs,
+    );
+  });
+
+  return Promise.race([work, expired]).finally(() => clearTimeout(timer));
 }
 
 /**
@@ -419,7 +610,10 @@ export async function scanTargets(targets, opts) {
   for (const target of targets) {
     let report;
     try {
-      report = await opts.probe(target, { timeoutMs: opts.timeoutMs });
+      report = await opts.probe(target, {
+        timeoutMs: opts.timeoutMs,
+        budgetMs: opts.budgetMs,
+      });
     } catch (err) {
       // One target's failure never aborts the sweep — the other servers'
       // verdicts are still worth having. The reason names the probe so a row
@@ -440,4 +634,156 @@ export async function scanTargets(targets, opts) {
     rulesetSize: opts.rulesetSize,
     results,
   };
+}
+
+// --- CLI -------------------------------------------------------------------
+
+const USAGE = `Usage: node scripts/scan-index.mjs [options]
+
+  --targets <file>   Cohort to scan (default: index/targets.json)
+  --out <file>       Where to write the snapshot
+                     (default: index/runs/<scanned date>.json)
+  --lib <specifier>  Library to probe through (default: ../dist/index.js)
+  --allow-local      Permit kind:"local" targets. Requires --out.
+  --timeout <ms>     Per-request timeout (default: 20000)
+  --budget <ms>      Wall-clock ceiling per target (default: 120000)
+  --help             Print this and exit
+`;
+
+/**
+ * Only this entry point touches the network or the filesystem.
+ *
+ * It probes through the built `dist/` by default — the same code a user
+ * installs — while the tests probe through `src/`. `--lib` exists because CI
+ * runs the suite before the build, so a test that hard-coded `dist/` would fail
+ * on a clean checkout.
+ */
+async function cli(argv) {
+  const { mkdirSync, renameSync, writeFileSync } = await import('node:fs');
+  const { dirname } = await import('node:path');
+  const { parseArgs } = await import('node:util');
+
+  let values;
+  try {
+    ({ values } = parseArgs({
+      args: argv,
+      options: {
+        targets: { type: 'string', default: 'index/targets.json' },
+        out: { type: 'string' },
+        lib: { type: 'string', default: '../dist/index.js' },
+        'allow-local': { type: 'boolean', default: false },
+        timeout: { type: 'string', default: '20000' },
+        budget: { type: 'string', default: '120000' },
+        help: { type: 'boolean', default: false },
+      },
+    }));
+  } catch (err) {
+    process.stderr.write(`${err.message}\n\n${USAGE}`);
+    return 2;
+  }
+
+  if (values.help) {
+    process.stdout.write(USAGE);
+    return 0;
+  }
+
+  // A local target names a command on one developer's machine and is recorded
+  // as `local:<id>`, which is not data anyone should read as a verdict on a
+  // published server. --allow-local is exactly the flag someone would reach
+  // for before committing a snapshot by hand, so it may not use the default
+  // path into the committed run directory.
+  if (values['allow-local'] && !values.out) {
+    process.stderr.write(
+      'Refusing to write a scan that may contain local targets into ' +
+        'index/runs/. Pass --out to write it somewhere else.\n',
+    );
+    return 2;
+  }
+
+  const timeoutMs = positiveInteger(values.timeout, '--timeout');
+  const budgetMs = positiveInteger(values.budget, '--budget');
+
+  const targets = loadTargets(readFileSync(values.targets, 'utf8'), {
+    allowLocal: values['allow-local'],
+  });
+
+  let lib;
+  try {
+    lib = await import(values.lib);
+  } catch (err) {
+    throw new Error(
+      `Could not load the library from ${values.lib} (${err.message}). ` +
+        'Run "npm run build" first, or pass --lib.',
+    );
+  }
+
+  const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+  const snapshot = await scanTargets(targets, {
+    probe: createProbe(lib),
+    timeoutMs,
+    budgetMs,
+    toolVersion: pkg.version,
+    rulesetSize: lib.ALL_RULES.length,
+  });
+
+  const out = values.out ?? `index/runs/${snapshot.scannedAt.slice(0, 10)}.json`;
+  mkdirSync(dirname(out), { recursive: true });
+
+  // Written beside the target and renamed, for the same reason the aggregator
+  // does it: writeFileSync truncates first, so a cancelled workflow could
+  // leave a zero-byte file that every later run fails to parse.
+  const temporary = `${out}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+  renameSync(temporary, out);
+
+  const measured = snapshot.results.filter((r) => r.unreachable === null);
+  const ready = measured.filter((r) => r.ready).length;
+  process.stdout.write(
+    `Wrote ${out}: ${ready}/${measured.length} ready` +
+      `${measured.length === snapshot.results.length ? '' : `, ${snapshot.results.length - measured.length} not measurable`}` +
+      ` across ${snapshot.results.length} targets\n`,
+  );
+  return 0;
+}
+
+function positiveInteger(value, flag) {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) {
+    throw new Error(
+      `${flag} must be a positive whole number of milliseconds, got ${JSON.stringify(value)}.`,
+    );
+  }
+  return n;
+}
+
+/**
+ * True when this file was run directly rather than imported.
+ *
+ * Compared via realpath, exactly as scripts/aggregate-index.mjs and
+ * src/cli/index.ts do it. The obvious version —
+ * \`import.meta.url === \`file://\${process.argv[1]}\`\` — never matches on
+ * Windows, where argv[1] is \`C:\\dir\\file.mjs\` and import.meta.url is
+ * percent-encoded \`file:///C:/dir/file.mjs\`. The failure is silent: the script
+ * runs, does nothing, and exits 0.
+ */
+function isDirectInvocation() {
+  const entry = process.argv[1];
+  if (!entry) return false;
+  try {
+    return realpathSync(entry) === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+}
+
+if (isDirectInvocation()) {
+  cli(process.argv.slice(2)).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err) => {
+      process.stderr.write(`scan-index failed: ${err.message}\n`);
+      process.exitCode = 1;
+    },
+  );
 }

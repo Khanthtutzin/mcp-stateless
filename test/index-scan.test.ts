@@ -521,22 +521,6 @@ describe('createProbe', () => {
     await expect(failing(local('modern', 'modern'))).rejects.toThrow('boom');
     expect(closed).toBe(1);
   });
-
-  it('refuses an npm target until installation exists', async () => {
-    // Task 5 adds the install step. Until then this must say so rather than
-    // silently spawn something that is not there.
-    await expect(
-      probe({
-        kind: 'npm',
-        id: 'x',
-        label: 'x',
-        package: '@example/server-a',
-        version: '1.2.3',
-        bin: 'server-a',
-        transport: 'stdio',
-      }),
-    ).rejects.toThrow(/npm target/i);
-  });
 });
 
 describe('toResult', () => {

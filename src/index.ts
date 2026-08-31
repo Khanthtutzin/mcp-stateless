@@ -6,6 +6,7 @@
  */
 export { runChecks, type RunOptions, type RunReport, type RuleOutcome } from './run.js';
 export { StdioTransport, tokenizeCommand } from './transport/stdio.js';
+export { planSpawn, type SpawnPlan } from './transport/spawn-plan.js';
 export { HttpTransport } from './transport/http.js';
 export type {
   Transport,

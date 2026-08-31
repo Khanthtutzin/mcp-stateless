@@ -120,8 +120,13 @@ Zero runtime dependencies, run with `node`. Responsibilities, in order:
 4. Reduce each `RunReport` to a verdict record (below). Discard evidence.
 5. Write `index/runs/<YYYY-MM-DD>.json`.
 
-One target's failure never aborts the sweep. Per-target wall-clock is bounded by
-`--timeout`; the job carries its own `timeout-minutes`.
+One target's failure never aborts the sweep.
+
+Per-target wall-clock is bounded by `--budget` (default 120 s), **not** by
+`--timeout`. An earlier draft of this section said otherwise and was wrong:
+`--timeout` is per _request_, and a server that accepts a connection and then
+answers nothing costs it once per probe — roughly twenty times over. The job
+carries its own `timeout-minutes` as a backstop.
 
 ### `scripts/aggregate-index.mjs`
 
@@ -300,6 +305,19 @@ exercised on every `npm test` without installing anything.
    credentials and no repository write access, so the blast radius is a wasted
    runner minute. Documented rather than hidden.
 6. **stdio only.** No HTTP target without its operator's consent.
+7. **The resolved bin must stay inside the package.** The bin _name_ is pinned
+   by a reviewer, but the path it maps to comes from the manifest of the package
+   that was just downloaded — so `"bin": {"x": "../../../../evil.js"}` would
+   otherwise hand us a path outside the install directory to execute.
+   `resolveNpmBin` resolves and then asserts containment, rejects an absolute
+   path, requires the file to exist, and accepts the string form of `bin` only
+   when the package's last segment equals the pinned name — because the string
+   form names no bin at all, so the pinned name would never be compared against
+   what runs.
+8. **Each target installs into its own directory**, removed afterwards whatever
+   happens. A shared tree would let two targets' dependency resolution decide
+   each other's versions, and the whole point is that each row names the code
+   that actually ran.
 
 ## Success criteria
 
