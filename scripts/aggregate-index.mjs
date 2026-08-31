@@ -436,7 +436,8 @@ export function applySnapshot(snapshotText, historyText) {
  *   node scripts/aggregate-index.mjs --snapshot index/runs/2026-09-07.json
  */
 async function cli(argv) {
-  const { readFileSync, renameSync, writeFileSync } = await import('node:fs');
+  const { mkdirSync, readFileSync, renameSync, writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
   const { parseArgs } = await import('node:util');
 
   let values;
@@ -446,6 +447,7 @@ async function cli(argv) {
       options: {
         snapshot: { type: 'string' },
         history: { type: 'string', default: 'index/history.json' },
+        'runs-dir': { type: 'string' },
       },
     }));
   } catch (err) {
@@ -455,15 +457,48 @@ async function cli(argv) {
 
   if (!values.snapshot) {
     process.stderr.write(
-      'Usage: node scripts/aggregate-index.mjs --snapshot <file> [--history <file>]\n',
+      'Usage: node scripts/aggregate-index.mjs --snapshot <file> [--history <file>] [--runs-dir <dir>]\n',
     );
     return 2;
   }
+  if (values['runs-dir'] !== undefined && values['runs-dir'].trim() === '') {
+    process.stderr.write('--runs-dir must name a directory.\n');
+    return 2;
+  }
 
+  const snapshotText = readFileSync(values.snapshot, 'utf8');
+
+  // Validation first, and everything after it derives from the validated row.
+  // `applySnapshot` throws for a snapshot that fails `parseRunSnapshot` or that
+  // measured nothing, so neither the run file nor the history is touched in
+  // either case.
   const { history, row } = applySnapshot(
-    readFileSync(values.snapshot, 'utf8'),
+    snapshotText,
     readFileSync(values.history, 'utf8'),
   );
+
+  // Placing the run file is deliberately done here rather than by the caller.
+  // The weekly workflow's committing job holds `contents: write`; deriving the
+  // filename in its shell would mean interpolating a snapshot field into a
+  // double-quoted string, where `$( )` still expands. `row.date` has been
+  // through the validator, and the join happens in Node.
+  let placed;
+  if (values['runs-dir'] !== undefined) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date)) {
+      // parseRunSnapshot already enforces this; belt and braces, because this
+      // value becomes a path.
+      throw new Error(`Refusing to build a path from date ${JSON.stringify(row.date)}.`);
+    }
+    mkdirSync(values['runs-dir'], { recursive: true });
+    placed = join(values['runs-dir'], `${row.date}.json`);
+    const temporary = `${placed}.tmp`;
+    writeFileSync(
+      temporary,
+      snapshotText.endsWith('\n') ? snapshotText : `${snapshotText}\n`,
+      'utf8',
+    );
+    renameSync(temporary, placed);
+  }
 
   // Written beside the target and renamed, which is atomic on one filesystem.
   // writeFileSync truncates before writing, so a process killed inside that
@@ -475,7 +510,8 @@ async function cli(argv) {
   process.stdout.write(
     `${row.date}: ${row.ready}/${row.measured} ready` +
       `${row.unreachable ? `, ${row.unreachable} not measurable` : ''}` +
-      ` (median ${row.medianErrors} breaking, ruleset ${row.rulesetSize})\n`,
+      ` (median ${row.medianErrors} breaking, ruleset ${row.rulesetSize})` +
+      `${placed ? ` → ${placed}` : ''}\n`,
   );
   return 0;
 }

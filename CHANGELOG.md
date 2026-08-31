@@ -13,6 +13,15 @@ silently start suppressing a different check.
 
 ### Added
 
+- A weekly ecosystem compliance index: a curated, version-pinned cohort probed
+  by CI, with an append-only history whose git log is the audit trail. The
+  scanning job holds no credentials and the committing job runs no third-party
+  code; only verdicts and rule ids are stored, never wire traffic. First data
+  point: 0 of 4 official servers ready, 33 breaking findings, every one of them
+  resolved by an SDK upgrade rather than a change to the server's own code.
+- `planSpawn` is now exported. It resolves an executable through `PATHEXT` and
+  routes Windows batch shims through `cmd.exe` with arguments it quotes itself,
+  which anything spawning an MCP server on Windows needs.
 - `--emit <format>:<file>`, repeatable. One probe renders any number of formats,
   so a CI job can have text on stdout, JSON for its outputs and SARIF for upload
   without probing the server three times. Files never receive ANSI escapes, and
@@ -22,6 +31,19 @@ silently start suppressing a different check.
   but ran whatever npm considered latest.
 - `test/cli.test.ts` — the CLI had no test coverage at all. Covers `--emit`,
   exit codes, `--fail-on never`, unknown rule ids and `--list-rules`.
+
+### Fixed
+
+- A run that could not be completed is no longer reported as ready. A server
+  that answered the first probe and then stopped came back with zero findings
+  and exit `0`, because every rule treats an unanswered probe as telling it
+  nothing — a green verdict drawn from a fraction of the ruleset. Such a run is
+  now `INCOMPLETE` in every format, carries an `incomplete` object in the JSON
+  report, and exits `2` even under `--fail-on never`.
+- Closing a transport while a run was still in flight raised an uncaught
+  `write after end` and terminated the process. A write to an ended pipe fails
+  asynchronously, so the `try`/`catch` around it never saw the error. Any
+  caller with a timeout could hit this.
 
 ### Changed
 

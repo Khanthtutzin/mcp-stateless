@@ -251,6 +251,10 @@ site/                  Astro + Starlight website — its own package, own lockfi
   src/loaders/         reads docs/ in place; no copy of the documentation exists
   src/docs-manifest.ts the one map from repository path to site route
   src/pages/index.astro  the landing page
+index/                 the compliance index — committed data, not build output
+  targets.json         the curated cohort, every version pinned by a reviewer
+  runs/<date>.json     one snapshot per weekly scan: verdicts only, no evidence
+  history.json         append-only trend, one row per scan date
 docs/
   ARCHITECTURE.md      this file
   usage.md             the CLI reference
@@ -258,9 +262,9 @@ docs/
   faq.md               questions the report tends to raise
   migration-walkthrough.md   a real server taken from 7 findings to READY
   rules/               generated rule pages, one per MCP0NN
-scripts/               the docs generator
+scripts/               docs generator · index scanner · index aggregator
 action.yml             composite GitHub Action
-.github/workflows/     ci.yml · release.yml · pages.yml
+.github/workflows/     ci.yml · release.yml · pages.yml · index.yml
 ```
 
 ---
@@ -662,6 +666,35 @@ site's **own** lint, format and build (the root suite does not cover the site),
 uses `site/package-lock.json` for its cache, and queues concurrent deploys
 rather than cancelling them so `main` always wins. Same OIDC mechanism as
 publishing.
+
+**[index.yml](../.github/workflows/index.yml)** — probes the curated cohort in
+`index/targets.json` every Monday and commits the result.
+
+It is **two jobs on purpose**, and the split is the whole security argument. The
+`scan` job executes third-party code — every server in the cohort, downloaded
+from npm — so it holds nothing worth taking: `permissions: {}`,
+`persist-credentials: false`, no secrets, and no npm cache to poison. It hands a
+snapshot to `commit` as an artefact. The `commit` job holds `contents: write`
+and therefore never installs or runs a target; it reads one JSON file, which
+`aggregate-index.mjs` validates against an allow-list before anything else
+happens.
+
+That job also passes `--runs-dir` rather than deriving the run filename itself.
+The obvious shell form —
+`date="$(node -p "require('./snapshot.json').scannedAt.slice(0,10)")"` — puts an
+unvalidated field from a file produced alongside third-party code inside a
+double-quoted string, where `$( )` still expands, in the one job that can push.
+The aggregator builds the path in Node from a date it has already validated.
+
+The property is asserted, not just reviewed:
+[test/index-workflow.test.ts](../test/index-workflow.test.ts) parses the YAML and
+fails if the scan job gains a permission, a cache, a secret or a `git push`, if
+the commit job gains a build or a scan, or if either drifts back to shell
+interpolation. Fifteen mutations of the workflow were each caught by it.
+
+Only verdicts and rule ids are stored, never evidence — republishing other
+projects' wire traffic would be both bulky and rude, and every row can be
+reproduced with one printed command.
 
 **[action.yml](../action.yml)** is a composite action wrapping the CLI. It
 probes **once**, with `--fail-on never`, and uses repeatable `--emit` to render

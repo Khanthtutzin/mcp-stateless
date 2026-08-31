@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -570,6 +570,162 @@ describe('aggregate-index CLI', () => {
     const result = run([]);
     expect(result.status).toBe(2);
     expect(result.stderr).toContain('--snapshot');
+  });
+});
+
+describe('aggregate-index CLI — --runs-dir places the snapshot itself', () => {
+  // The weekly workflow's committing job holds `contents: write` and must
+  // never execute target code or interpolate anything from a snapshot into a
+  // shell command. Deriving the filename in the shell —
+  // `date="$(node -p 'require("./s.json").scannedAt.slice(0,10)')"` — puts an
+  // unvalidated field inside a double-quoted string, where `$( )` still
+  // expands. Doing it here means the path is built only from a value that has
+  // already been through parseRunSnapshot.
+  const script = fileURLToPath(
+    new URL('../scripts/aggregate-index.mjs', import.meta.url),
+  );
+
+  function run(args: string[]) {
+    return spawnSync(process.execPath, [script, ...args], { encoding: 'utf8' });
+  }
+
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'mcp-index-runsdir-'));
+    writeFileSync(join(dir, 'history.json'), '{"schemaVersion":1,"rows":[]}');
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  function snapshotFile(over: Record<string, unknown> = {}) {
+    const path = join(dir, 'snapshot.json');
+    writeFileSync(
+      path,
+      JSON.stringify({
+        schemaVersion: 1,
+        scannedAt: '2026-09-07T06:00:00.000Z',
+        toolVersion: '0.1.5',
+        rulesetSize: 18,
+        results: [goodResult()],
+        ...over,
+      }),
+    );
+    return path;
+  }
+
+  it('writes the snapshot under the run directory, named by its date', () => {
+    const runs = join(dir, 'runs');
+    const result = run([
+      '--snapshot',
+      snapshotFile(),
+      '--history',
+      join(dir, 'history.json'),
+      '--runs-dir',
+      runs,
+    ]);
+
+    expect(result.stderr).toBe('');
+    expect(result.status).toBe(0);
+
+    const placed = JSON.parse(readFileSync(join(runs, '2026-09-07.json'), 'utf8'));
+    expect(placed.scannedAt).toBe('2026-09-07T06:00:00.000Z');
+    expect(result.stdout).toContain('2026-09-07.json');
+  });
+
+  it('creates the run directory when it does not exist', () => {
+    const runs = join(dir, 'a', 'b', 'runs');
+    const result = run([
+      '--snapshot',
+      snapshotFile(),
+      '--history',
+      join(dir, 'history.json'),
+      '--runs-dir',
+      runs,
+    ]);
+    expect(result.status).toBe(0);
+    expect(existsSync(join(runs, '2026-09-07.json'))).toBe(true);
+  });
+
+  it('places nothing when the snapshot does not validate', () => {
+    // Validation first, then the write. The other order would commit a file
+    // the aggregator had already refused.
+    const runs = join(dir, 'runs');
+    const bad = join(dir, 'bad.json');
+    writeFileSync(
+      bad,
+      JSON.stringify({
+        schemaVersion: 1,
+        scannedAt: '2026-09-07T06:00:00.000Z',
+        toolVersion: '0.1.5',
+        rulesetSize: 18,
+        results: [{ ...goodResult(), authorization: 'Bearer SECRET' }],
+      }),
+    );
+
+    const result = run([
+      '--snapshot',
+      bad,
+      '--history',
+      join(dir, 'history.json'),
+      '--runs-dir',
+      runs,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(existsSync(join(runs, '2026-09-07.json'))).toBe(false);
+    expect(JSON.parse(readFileSync(join(dir, 'history.json'), 'utf8')).rows).toEqual([]);
+  });
+
+  it('places nothing when nothing was measurable', () => {
+    const runs = join(dir, 'runs');
+    const result = run([
+      '--snapshot',
+      snapshotFile({
+        results: [
+          goodResult({
+            unreachable: 'install failed',
+            errorCount: 0,
+            warningCount: 0,
+            sdkErrors: 0,
+            applicationErrors: 0,
+            failedRules: [],
+          }),
+        ],
+      }),
+      '--history',
+      join(dir, 'history.json'),
+      '--runs-dir',
+      runs,
+    ]);
+
+    expect(result.status).toBe(1);
+    expect(existsSync(join(runs, '2026-09-07.json'))).toBe(false);
+  });
+
+  it('refuses a run directory that is not a plain path', () => {
+    for (const runs of ['', '   ']) {
+      const result = run([
+        '--snapshot',
+        snapshotFile(),
+        '--history',
+        join(dir, 'history.json'),
+        '--runs-dir',
+        runs,
+      ]);
+      expect(result.status).not.toBe(0);
+    }
+  });
+
+  it('leaves the run directory alone when --runs-dir is not given', () => {
+    const result = run([
+      '--snapshot',
+      snapshotFile(),
+      '--history',
+      join(dir, 'history.json'),
+    ]);
+    expect(result.status).toBe(0);
+    expect(existsSync(join(dir, 'runs'))).toBe(false);
   });
 });
 

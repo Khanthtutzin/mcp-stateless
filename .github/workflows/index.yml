@@ -1,0 +1,100 @@
+name: Compliance index
+
+on:
+  schedule:
+    # Mondays, 06:00 UTC.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+# Never two at once: both jobs write to index/, and a second run racing the
+# first would either lose a row or fail to push.
+concurrency:
+  group: index
+  cancel-in-progress: false
+
+jobs:
+  # This job runs third-party code — every server in the cohort, downloaded from
+  # npm and executed. It therefore holds NO credentials: no token scopes, no
+  # persisted git credentials, no secrets, and no npm cache to poison. A
+  # compromised upstream release finds nothing to steal and no way to push here.
+  #
+  # It is the reason this workflow is two jobs instead of one.
+  scan:
+    name: probe the cohort
+    # A fork would otherwise run this weekly and try to commit to itself.
+    if: github.repository == 'Khanthtutzin/mcp-stateless'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: {}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - run: npm ci
+
+      # The scan probes through dist/, exactly as a user's install does.
+      - run: npm run build
+
+      - name: Probe the cohort
+        run: npm run index:scan -- --out snapshot.json --timeout 30000 --budget 180000
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: index-snapshot
+          path: snapshot.json
+          retention-days: 7
+
+  # This job holds a write credential, so it never executes target code. It
+  # reads one JSON file, and the script it calls validates that file against an
+  # allow-list before anything else happens.
+  #
+  # Note what is NOT here: no shell interpolation of anything out of the
+  # snapshot. `--runs-dir` makes the aggregator build the run file's path from
+  # the date it has already validated, so no field from a file produced
+  # alongside third-party code ever reaches a command line.
+  commit:
+    name: aggregate and commit
+    needs: scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: index-snapshot
+
+      - name: Validate, place and aggregate
+        run: |
+          node scripts/aggregate-index.mjs \
+            --snapshot snapshot.json \
+            --history index/history.json \
+            --runs-dir index/runs
+
+      - name: Commit the run
+        run: |
+          rm -f snapshot.json
+          # --porcelain, not `git diff --quiet`: the new run file is untracked,
+          # and a diff of tracked files alone would report "no change" on a
+          # re-run whose history row came out identical.
+          if [ -z "$(git status --porcelain index/)" ]; then
+            echo "No change in index/ — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index/
+          git commit -m "chore(index): weekly scan"
+          git push

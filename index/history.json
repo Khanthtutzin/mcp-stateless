@@ -1,4 +1,27 @@
 {
   "schemaVersion": 1,
-  "rows": []
+  "rows": [
+    {
+      "date": "2026-08-31",
+      "toolVersion": "0.1.5",
+      "rulesetSize": 18,
+      "cohortSize": 4,
+      "measured": 4,
+      "unreachable": 0,
+      "ready": 0,
+      "medianErrors": 8,
+      "sdkErrors": 33,
+      "applicationErrors": 0,
+      "ruleFailureCounts": {
+        "MCP001": 4,
+        "MCP002": 4,
+        "MCP004": 4,
+        "MCP005": 4,
+        "MCP006": 4,
+        "MCP007": 1,
+        "MCP008": 2,
+        "MCP009": 4
+      }
+    }
+  ]
 }
