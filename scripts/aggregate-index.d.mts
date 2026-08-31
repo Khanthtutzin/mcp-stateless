@@ -5,6 +5,13 @@
  * test/fixtures/servers/http-server.d.mts: the script stays plain JavaScript so
  * it never ships inside the published package, while TS tests still get real
  * types.
+ *
+ * Caveat worth knowing: nothing machine-checks this declaration against the
+ * implementation — tsconfig's `include` covers src/ and test/ only, and
+ * `skipLibCheck` is on. The guarantee that a `RunSnapshot` really has these
+ * types at runtime comes from `parseRunSnapshot`, which validates every field
+ * against an allow-list and rejects anything else. Keep the two in step by
+ * hand, and prefer adding a test over trusting the signature.
  */
 
 export interface TargetResult {
