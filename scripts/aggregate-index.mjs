@@ -60,6 +60,17 @@ const EVIDENCE_KEYS = [
 
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
+/**
+ * Rule ids are permanent and of one shape. Validating it matters because these
+ * strings are rendered as labels — "most common blocker" — so an unvalidated id
+ * is unvalidated text on the page.
+ */
+const RULE_ID = /^MCP\d{3}$/;
+
+function isRuleId(value) {
+  return typeof value === 'string' && RULE_ID.test(value);
+}
+
 function isCount(value) {
   return Number.isInteger(value) && value >= 0;
 }
@@ -80,9 +91,9 @@ function checkField(kind, value) {
     case 'count':
       return isCount(value) ? null : 'must be a non-negative integer';
     case 'ruleIds':
-      return Array.isArray(value) && value.every(isText)
+      return Array.isArray(value) && value.every(isRuleId)
         ? null
-        : 'must be an array of rule ids';
+        : 'must be an array of rule ids like "MCP001"';
     case 'reason':
       // Null means measured. An empty string would be falsy and would silently
       // count as measured while carrying no numbers, so it is rejected.
@@ -235,7 +246,7 @@ const ROW_FIELDS = {
   measured: 'count',
   unreachable: 'count',
   ready: 'count',
-  medianErrors: 'optionalNumber',
+  medianErrors: 'median',
   sdkErrors: 'count',
   applicationErrors: 'count',
   ruleFailureCounts: 'counts',
@@ -246,29 +257,37 @@ const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 /** Validate one history-row field, returning an error message or null. */
 function checkRowField(kind, value) {
   switch (kind) {
-    case 'date':
-      return typeof value === 'string' && DATE_ONLY.test(value)
-        ? null
-        : 'must be a YYYY-MM-DD date';
+    case 'date': {
+      // Shape alone accepts 2026-02-30, which Date silently resolves to 2 March
+      // — a typo would move a point on the trend with no error anywhere. The
+      // round trip is guarded because toISOString throws on an invalid Date.
+      const bad = 'must be a real YYYY-MM-DD calendar date';
+      if (typeof value !== 'string' || !DATE_ONLY.test(value)) return bad;
+      const parsed = new Date(`${value}T00:00:00Z`);
+      if (Number.isNaN(parsed.getTime())) return bad;
+      return parsed.toISOString().startsWith(value) ? null : bad;
+    }
     case 'text':
       return isText(value) ? null : 'must be a non-empty string';
     case 'positive':
       return Number.isInteger(value) && value > 0 ? null : 'must be a positive integer';
     case 'count':
       return isCount(value) ? null : 'must be a non-negative integer';
-    case 'optionalNumber':
-      // Null when nothing was measurable; fractional when an even cohort
-      // averaged its two middle values.
-      return value === null || (typeof value === 'number' && Number.isFinite(value))
+    case 'median':
+      // summarise returns null only when nothing was measurable, and such a run
+      // is never recorded — so a stored row always has a real, non-negative
+      // median. Fractional is normal: an even cohort averages its middle two.
+      return typeof value === 'number' && Number.isFinite(value) && value >= 0
         ? null
-        : 'must be null or a finite number';
+        : 'must be a non-negative number';
     case 'counts':
       return value !== null &&
         typeof value === 'object' &&
         !Array.isArray(value) &&
+        Object.keys(value).every(isRuleId) &&
         Object.values(value).every(isCount)
         ? null
-        : 'must be an object of rule ids to non-negative integers';
+        : 'must be an object mapping rule ids like "MCP001" to non-negative integers';
     default:
       return `has no validator for ${kind}`;
   }
@@ -332,9 +351,34 @@ export function parseHistory(text) {
         `${named}: ready (${row.ready}) cannot exceed measured (${row.measured}).`,
       );
     }
+    // A recorded row always measured something. An all-zero row satisfies the
+    // arithmetic above and renders ready/measured as NaN%.
+    if (row.measured === 0) {
+      throw new Error(
+        `${named}: measured is 0. A run in which nothing was measurable is not recorded.`,
+      );
+    }
+    // Every count is a number of servers, so none can exceed the number
+    // measured — 500 failures out of 2 renders 25000% on the chart.
+    for (const [ruleId, count] of Object.entries(row.ruleFailureCounts)) {
+      if (count > row.measured) {
+        throw new Error(
+          `${named}: ${ruleId} failed ${count} times but only ${row.measured} servers were measured.`,
+        );
+      }
+    }
 
     if (seen.has(row.date)) {
       throw new Error(`Duplicate history row for ${JSON.stringify(row.date)}.`);
+    }
+    // The site renders in array order, so a descending file draws the trend
+    // backwards. upsertRow re-sorts on every write; a hand edit or a branch
+    // merge is what this catches.
+    const previous = raw.rows[index - 1];
+    if (previous && previous.date > row.date) {
+      throw new Error(
+        `History rows must be in ascending date order: ${previous.date} precedes ${row.date}.`,
+      );
     }
     seen.add(row.date);
   }
@@ -351,8 +395,13 @@ export function parseHistory(text) {
  * Returns a new object; the input is left alone.
  */
 export function upsertRow(history, row) {
-  const rows = history.rows.filter((existing) => existing.date !== row.date);
-  rows.push(row);
+  // Deep copies, so neither the caller's history nor the row it passed can be
+  // reached through the value returned. A shallow copy protected the array and
+  // left every row object shared.
+  const rows = history.rows
+    .filter((existing) => existing.date !== row.date)
+    .map((existing) => structuredClone(existing));
+  rows.push(structuredClone(row));
   rows.sort((a, b) => a.date.localeCompare(b.date));
   return { ...history, rows };
 }
@@ -365,13 +414,16 @@ export function upsertRow(history, row) {
  * same reasoning that makes an unreachable server report no findings at all.
  */
 export function applySnapshot(snapshotText, historyText) {
+  // History first. Otherwise a week in which nothing was measurable reports only
+  // that, and an operator never learns the committed file is unparseable.
+  const history = parseHistory(historyText);
   const row = summarise(parseRunSnapshot(snapshotText));
   if (row.measured === 0) {
     throw new Error(
       `Nothing was measurable in the run of ${row.date} (${row.unreachable} of ${row.cohortSize} targets unreachable); refusing to record a row.`,
     );
   }
-  return { history: upsertRow(parseHistory(historyText), row), row };
+  return { history: upsertRow(history, row), row };
 }
 
 // --- CLI -------------------------------------------------------------------
@@ -384,7 +436,7 @@ export function applySnapshot(snapshotText, historyText) {
  *   node scripts/aggregate-index.mjs --snapshot index/runs/2026-09-07.json
  */
 async function cli(argv) {
-  const { readFileSync, writeFileSync } = await import('node:fs');
+  const { readFileSync, renameSync, writeFileSync } = await import('node:fs');
   const { parseArgs } = await import('node:util');
 
   let values;
@@ -413,7 +465,13 @@ async function cli(argv) {
     readFileSync(values.history, 'utf8'),
   );
 
-  writeFileSync(values.history, `${JSON.stringify(history, null, 2)}\n`, 'utf8');
+  // Written beside the target and renamed, which is atomic on one filesystem.
+  // writeFileSync truncates before writing, so a process killed inside that
+  // window — a cancelled workflow, a timeout-minutes kill — would leave the
+  // committed history at zero bytes and every later run unable to parse it.
+  const temporary = `${values.history}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(history, null, 2)}\n`, 'utf8');
+  renameSync(temporary, values.history);
   process.stdout.write(
     `${row.date}: ${row.ready}/${row.measured} ready` +
       `${row.unreachable ? `, ${row.unreachable} not measurable` : ''}` +

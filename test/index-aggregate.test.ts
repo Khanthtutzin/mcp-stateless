@@ -572,3 +572,150 @@ describe('aggregate-index CLI', () => {
     expect(result.stderr).toContain('--snapshot');
   });
 });
+
+// --- Hardening from the Task 2 review ---------------------------------------
+
+describe('the allow-list is an allow-list, not a blacklist', () => {
+  // These use stray keys that are NOT on the evidence list. A blacklist would
+  // accept them, so these are the tests that can tell the two apart — the
+  // earlier ones all used keys that appeared on both lists.
+  it('rejects a snapshot key that is merely unknown', () => {
+    expect(() =>
+      parseRunSnapshot(rawText([goodResult()], { generatedAt: 'now' })),
+    ).toThrow(/unexpected key/);
+  });
+
+  it('rejects a result key that is merely unknown', () => {
+    const odd = { ...goodResult(), percentReady: 50 };
+    expect(() => parseRunSnapshot(rawText([odd]))).toThrow(/unexpected key/);
+  });
+
+  it('rejects a history key that is merely unknown', () => {
+    expect(() => parseHistory(historyText([], { generatedAt: 'now' }))).toThrow(
+      /unexpected key/,
+    );
+  });
+
+  it('rejects a history row key that is merely unknown', () => {
+    const odd = { ...row('2026-09-07'), notes: 'looks fine' };
+    expect(() => parseHistory(historyText([odd]))).toThrow(/unexpected key/);
+  });
+});
+
+describe('rule ids are validated, not merely non-empty', () => {
+  it('rejects a failedRules entry that is not a rule id', () => {
+    expect(() =>
+      parseRunSnapshot(rawText([goodResult({ failedRules: ['not-a-rule'] })])),
+    ).toThrow(/failedRules/);
+  });
+
+  it('rejects a ruleFailureCounts key that is not a rule id', () => {
+    // This label is rendered on the page as "most common blocker".
+    const bad = row('2026-09-07', {
+      ruleFailureCounts: { '<script>alert(1)</script>': 1 },
+    });
+    expect(() => parseHistory(historyText([bad]))).toThrow(/ruleFailureCounts/);
+  });
+});
+
+describe('history rows cannot render impossible numbers', () => {
+  it('rejects a rule count larger than the number of servers measured', () => {
+    // 500 failures out of 2 measured renders 25000% on the chart.
+    const bad = row('2026-09-07', { ruleFailureCounts: { MCP001: 500 } });
+    expect(() => parseHistory(historyText([bad]))).toThrow(/MCP001|measured/);
+  });
+
+  it('rejects an all-zero row, which would render NaN%', () => {
+    const empty = row('2026-09-07', {
+      cohortSize: 0,
+      measured: 0,
+      unreachable: 0,
+      ready: 0,
+      // 0 rather than null, so this isolates the measured===0 guard instead of
+      // tripping the median one first.
+      medianErrors: 0,
+      sdkErrors: 0,
+      applicationErrors: 0,
+      ruleFailureCounts: {},
+    });
+    expect(() => parseHistory(historyText([empty]))).toThrow(/measur/);
+  });
+
+  it('rejects a negative or null medianErrors in a recorded row', () => {
+    // summarise returns null only when nothing was measurable, and such a run
+    // is never recorded — so a stored row always has a real median.
+    expect(() =>
+      parseHistory(historyText([row('2026-09-07', { medianErrors: -5 })])),
+    ).toThrow(/medianErrors/);
+    expect(() =>
+      parseHistory(historyText([row('2026-09-07', { medianErrors: null })])),
+    ).toThrow(/medianErrors/);
+  });
+
+  it('rejects a date that does not exist on a calendar', () => {
+    // new Date("2026-02-30") silently becomes 2 March, shifting a chart point.
+    for (const date of ['2026-02-30', '2026-13-45', '0000-00-00']) {
+      expect(() => parseHistory(historyText([row(date)]))).toThrow(/date/);
+    }
+  });
+
+  it('rejects rows that are not in ascending date order', () => {
+    // The site renders in array order, so a descending file draws the trend
+    // backwards.
+    expect(() =>
+      parseHistory(historyText([row('2026-09-14'), row('2026-09-07')])),
+    ).toThrow(/order/);
+  });
+});
+
+describe('upsertRow really does leave its input alone', () => {
+  it('does not share row objects with the history it was given', () => {
+    const original = { schemaVersion: 1 as const, rows: [row('2026-09-07')] };
+    const next = upsertRow(original, row('2026-09-14'));
+
+    next.rows[0]!.ready = 99;
+    next.rows[0]!.ruleFailureCounts['MCP001'] = 999;
+
+    expect(original.rows[0]!.ready).toBe(0);
+    expect(original.rows[0]!.ruleFailureCounts['MCP001']).toBe(2);
+  });
+
+  it('does not alias the row it returns with the one it stored', () => {
+    const { history, row: added } = applySnapshot(
+      JSON.stringify({
+        schemaVersion: 1,
+        scannedAt: '2026-09-07T06:04:11.000Z',
+        toolVersion: '1.0.0',
+        rulesetSize: 18,
+        results: [goodResult()],
+      }),
+      '{"schemaVersion":1,"rows":[]}',
+    );
+    added.ready = 42;
+    expect(history.rows[0]!.ready).not.toBe(42);
+  });
+});
+
+describe('applySnapshot reports the right file first', () => {
+  it('names the corrupt history even when nothing was measurable', () => {
+    // Otherwise the operator investigates the scanner and never learns the
+    // committed file is unparseable.
+    const dead = JSON.stringify({
+      schemaVersion: 1,
+      scannedAt: '2026-09-07T06:04:11.000Z',
+      toolVersion: '1.0.0',
+      rulesetSize: 18,
+      results: [
+        goodResult({
+          unreachable: 'install failed',
+          errorCount: 0,
+          warningCount: 0,
+          sdkErrors: 0,
+          applicationErrors: 0,
+          failedRules: [],
+        }),
+      ],
+    });
+    expect(() => applySnapshot(dead, 'not json at all')).toThrow(/History/);
+  });
+});
