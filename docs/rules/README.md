@@ -3,37 +3,64 @@
 Every check `mcp-stateless` performs against MCP 2026-07-28, with the
 changelog entry it enforces.
 
+## By area
+
+What the revision changed, and which checks cover each part of it.
+
+| Area | What changed | Rules |
+| --- | --- | --- |
+| **Discovery** | How a client learns what a server can do, now that no handshake tells it. | [MCP001](MCP001.md) |
+| **Statelessness** | The handshake and per-connection sessions are gone; every request stands alone. | [MCP002](MCP002.md) · [MCP003](MCP003.md) |
+| **Removed methods** | Methods deleted in this revision, and the one that replaced subscriptions. | [MCP006](MCP006.md) · [MCP007](MCP007.md) · [MCP008](MCP008.md) · [MCP009](MCP009.md) · [MCP010](MCP010.md) |
+| **Result shape** | Fields every result must now carry, including who produced it. | [MCP004](MCP004.md) · [MCP005](MCP005.md) · [MCP018](MCP018.md) |
+| **Error codes** | Codes that moved into the reserved range, or changed meaning. | [MCP011](MCP011.md) · [MCP012](MCP012.md) |
+| **Request envelope** | The per-request `_meta` block and the headers that accompany it. | [MCP013](MCP013.md) · [MCP014](MCP014.md) |
+| **Deprecations** | Still works today, scheduled for removal or degrading behaviour. | [MCP015](MCP015.md) · [MCP016](MCP016.md) · [MCP017](MCP017.md) |
+
+## Who has to fix it
+
+Every rule declares an owner, and it is the most useful column in the table
+below. 15 of the 18 rules are
+protocol plumbing your MCP SDK owns: upgrading to a release that targets
+2026-07-28 resolves them with no change to your own code. Only
+[MCP013](MCP013.md), [MCP015](MCP015.md), [MCP017](MCP017.md) can ever be
+something you wrote.
+
+So the order to work in is fixed: upgrade the SDK, re-run the check, and then
+look at what is left — rather than reading a list of eighteen findings, most of
+which describe code you did not write.
+
 ## Breaking
 
 A server failing any of these will not work with 2026-07-28 clients.
 
-| Rule | Severity | Check | Transports |
-| --- | --- | --- | --- |
-| [MCP001](MCP001.md) | `error` | server/discover is not implemented | stdio, http |
-| [MCP002](MCP002.md) | `error` | Server still requires the initialize handshake | stdio, http |
-| [MCP003](MCP003.md) | `error` | Server still uses the removed Mcp-Session-Id header | http |
-| [MCP004](MCP004.md) | `error` | Results are missing the required resultType field | stdio, http |
-| [MCP005](MCP005.md) | `error` | List results are missing the required ttlMs and cacheScope fields | stdio, http |
-| [MCP006](MCP006.md) | `error` | The removed ping method is still implemented | stdio, http |
-| [MCP007](MCP007.md) | `error` | The removed logging/setLevel method is still implemented | stdio, http |
-| [MCP008](MCP008.md) | `error` | The removed resources/subscribe methods are still implemented | stdio, http |
-| [MCP009](MCP009.md) | `error` | subscriptions/listen is missing despite advertised listChanged capabilities | stdio, http |
-| [MCP010](MCP010.md) | `error` | The removed HTTP GET stream endpoint is still served | http |
-| [MCP011](MCP011.md) | `error` | Resource-not-found still returns the old -32002 error code | stdio, http |
-| [MCP012](MCP012.md) | `error` | Protocol error codes were not renumbered into the reserved range | stdio, http |
-| [MCP013](MCP013.md) | `error` | Server rejects requests carrying the _meta protocol envelope | stdio, http |
-| [MCP014](MCP014.md) | `error` | Server rejects the required Mcp-Method and Mcp-Name headers | http |
+| Rule | Severity | Check | Fixed by | Transports |
+| --- | --- | --- | --- | --- |
+| [MCP001](MCP001.md) | `error` | server/discover is not implemented | SDK upgrade | stdio, http |
+| [MCP002](MCP002.md) | `error` | Server still requires the initialize handshake | SDK upgrade | stdio, http |
+| [MCP003](MCP003.md) | `error` | Server still uses the removed Mcp-Session-Id header | SDK upgrade | http |
+| [MCP004](MCP004.md) | `error` | Results are missing the required resultType field | SDK upgrade | stdio, http |
+| [MCP005](MCP005.md) | `error` | List results are missing the required ttlMs and cacheScope fields | SDK upgrade | stdio, http |
+| [MCP006](MCP006.md) | `error` | The removed ping method is still implemented | SDK upgrade | stdio, http |
+| [MCP007](MCP007.md) | `error` | The removed logging/setLevel method is still implemented | SDK upgrade | stdio, http |
+| [MCP008](MCP008.md) | `error` | The removed resources/subscribe methods are still implemented | SDK upgrade | stdio, http |
+| [MCP009](MCP009.md) | `error` | subscriptions/listen is missing despite advertised listChanged capabilities | SDK upgrade | stdio, http |
+| [MCP010](MCP010.md) | `error` | The removed HTTP GET stream endpoint is still served | SDK upgrade | http |
+| [MCP011](MCP011.md) | `error` | Resource-not-found still returns the old -32002 error code | SDK upgrade | stdio, http |
+| [MCP012](MCP012.md) | `error` | Protocol error codes were not renumbered into the reserved range | SDK upgrade | stdio, http |
+| [MCP013](MCP013.md) | `error` | Server rejects requests carrying the _meta protocol envelope | your code | stdio, http |
+| [MCP014](MCP014.md) | `error` | Server rejects the required Mcp-Method and Mcp-Name headers | SDK upgrade | http |
 
 ## Deprecations and advisories
 
 These still work today, but are scheduled for removal or degrade behaviour.
 
-| Rule | Severity | Check | Transports |
-| --- | --- | --- | --- |
-| [MCP015](MCP015.md) | `warning` | Server declares deprecated Roots, Sampling or Logging capabilities | stdio, http |
-| [MCP016](MCP016.md) | `warning` | Deprecated HTTP+SSE transport detected | http |
-| [MCP017](MCP017.md) | `warning` | tools/list ordering is not deterministic | stdio, http |
-| [MCP018](MCP018.md) | `warning` | Results do not identify the server via _meta serverInfo | stdio, http |
+| Rule | Severity | Check | Fixed by | Transports |
+| --- | --- | --- | --- | --- |
+| [MCP015](MCP015.md) | `warning` | Server declares deprecated Roots, Sampling or Logging capabilities | your code | stdio, http |
+| [MCP016](MCP016.md) | `warning` | Deprecated HTTP+SSE transport detected | SDK upgrade | http |
+| [MCP017](MCP017.md) | `warning` | tools/list ordering is not deterministic | your code | stdio, http |
+| [MCP018](MCP018.md) | `warning` | Results do not identify the server via _meta serverInfo | SDK upgrade | stdio, http |
 
 ## Not yet covered
 

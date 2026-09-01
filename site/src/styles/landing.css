@@ -506,6 +506,177 @@ body:has(.landing-page) h1#_top {
   color: var(--ready);
 }
 
+/**
+ * The three objections a developer has before running an unknown command
+ * against a live server, answered where the command is.
+ */
+.reassure {
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+/* ── The flow strip ────────────────────────────────────────────────────── */
+
+/**
+ * What the tool does, in four words, directly under the command that does it.
+ *
+ * An ordered list rather than styled divs, because it is a sequence and a
+ * screen reader should say so. The chevrons are generated content, so they are
+ * never read aloud and never selected with the text.
+ */
+.flow {
+  list-style: none;
+  margin: 1.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.85rem;
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+}
+
+.flow li {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  white-space: nowrap;
+}
+
+.flow li + li::before {
+  content: '→';
+  color: var(--line);
+  font-size: 0.9rem;
+}
+
+.flow .flow-verdict {
+  color: var(--ready);
+  font-weight: 700;
+}
+
+/* ── How it works ──────────────────────────────────────────────────────── */
+
+/**
+ * Numbered because the order is load-bearing: the bare tools/list has to
+ * precede the handshake attempt, or a successful initialize masks a server
+ * that still requires one.
+ */
+.how {
+  list-style: none;
+  counter-reset: none;
+  margin: 2.25rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--line);
+  border-block: 1px solid var(--line);
+}
+
+.how-step {
+  background: var(--panel);
+  display: grid;
+  grid-template-columns: 3.25rem 1fr;
+  align-items: start;
+  padding: 1.15rem 1.35rem;
+}
+
+.how-n {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  padding-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.how-body {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.how-body b {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+}
+
+.how-what {
+  color: var(--muted);
+  font-size: 0.94rem;
+  max-width: 60ch;
+}
+
+.how-wire {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--link);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin-top: 0.2rem;
+  overflow-x: auto;
+}
+
+/* ── Ownership summary ─────────────────────────────────────────────────── */
+
+/**
+ * The split, stated before the table that itemises it. A reader who takes only
+ * one thing from this page should take this line.
+ */
+.verdict-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem 0.85rem;
+  margin: 2rem 0 1.25rem;
+  padding: 0;
+}
+
+.verdict-card-n {
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.chip {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.28rem 0.55rem;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.chip-sdk {
+  color: var(--break);
+  background: var(--break-wash);
+  border-color: var(--break);
+}
+
+.chip-app {
+  color: var(--muted);
+  background: transparent;
+  border-color: var(--line);
+}
+
+.cohort {
+  border-left: 2px solid var(--ready);
+  padding-left: 1.1rem;
+  margin-top: 2rem;
+}
+
+@media (max-width: 34rem) {
+  .how-step {
+    grid-template-columns: 2.25rem 1fr;
+    padding-inline: 1rem;
+  }
+}
+
 /* ── Stats ─────────────────────────────────────────────────────────────── */
 
 .stats {

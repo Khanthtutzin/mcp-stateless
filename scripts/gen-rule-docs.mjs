@@ -96,31 +96,133 @@ silently matching a different check later.
 `;
 }
 
+/**
+ * User-facing groupings for the catalogue.
+ *
+ * Eighteen ids in one list is a reference, not an overview: a reader arriving
+ * without a finding in hand cannot see what the tool covers. These group the
+ * rules by the part of the protocol that changed, in plain language, before the
+ * ids appear.
+ *
+ * The partition is asserted below — every rule belongs to exactly one area, and
+ * adding a rule without placing it fails the build rather than quietly dropping
+ * it out of the overview.
+ */
+const AREAS = [
+  {
+    name: 'Discovery',
+    plain: 'How a client learns what a server can do, now that no handshake tells it.',
+    ids: ['MCP001'],
+  },
+  {
+    name: 'Statelessness',
+    plain:
+      'The handshake and per-connection sessions are gone; every request stands alone.',
+    ids: ['MCP002', 'MCP003'],
+  },
+  {
+    name: 'Removed methods',
+    plain: 'Methods deleted in this revision, and the one that replaced subscriptions.',
+    ids: ['MCP006', 'MCP007', 'MCP008', 'MCP009', 'MCP010'],
+  },
+  {
+    name: 'Result shape',
+    plain: 'Fields every result must now carry, including who produced it.',
+    ids: ['MCP004', 'MCP005', 'MCP018'],
+  },
+  {
+    name: 'Error codes',
+    plain: 'Codes that moved into the reserved range, or changed meaning.',
+    ids: ['MCP011', 'MCP012'],
+  },
+  {
+    name: 'Request envelope',
+    plain: 'The per-request `_meta` block and the headers that accompany it.',
+    ids: ['MCP013', 'MCP014'],
+  },
+  {
+    name: 'Deprecations',
+    plain: 'Still works today, scheduled for removal or degrading behaviour.',
+    ids: ['MCP015', 'MCP016', 'MCP017'],
+  },
+];
+
+/** Fail the build if the areas above stop covering the rules exactly once each. */
+function assertAreasPartition(rules) {
+  const placed = AREAS.flatMap((a) => a.ids);
+  const duplicated = placed.filter((id, i) => placed.indexOf(id) !== i);
+  if (duplicated.length > 0) {
+    throw new Error(`AREAS lists these rules more than once: ${duplicated.join(', ')}`);
+  }
+  const known = new Set(rules.map((r) => r.id));
+  const unknown = placed.filter((id) => !known.has(id));
+  if (unknown.length > 0) {
+    throw new Error(`AREAS names rules that do not exist: ${unknown.join(', ')}`);
+  }
+  const missing = rules.map((r) => r.id).filter((id) => !placed.includes(id));
+  if (missing.length > 0) {
+    throw new Error(
+      `AREAS does not place these rules: ${missing.join(', ')}. ` +
+        'Add each to an area in scripts/gen-rule-docs.mjs.',
+    );
+  }
+}
+
 function index(rules) {
+  assertAreasPartition(rules);
+
+  const owner = (r) => (r.remediation === 'sdk' ? 'SDK upgrade' : 'your code');
   const row = (r) =>
-    `| [${r.id}](${r.id}.md) | \`${r.severity}\` | ${r.title} | ${r.appliesTo.join(', ')} |`;
+    `| [${r.id}](${r.id}.md) | \`${r.severity}\` | ${r.title} | ${owner(r)} | ${r.appliesTo.join(', ')} |`;
   const errors = rules.filter((r) => r.severity === 'error');
   const warnings = rules.filter((r) => r.severity === 'warning');
+  const application = rules.filter((r) => r.remediation === 'application');
+
+  const areaRow = (area) => {
+    const ids = area.ids.map((id) => `[${id}](${id}.md)`).join(' · ');
+    return `| **${area.name}** | ${area.plain} | ${ids} |`;
+  };
 
   return `# Rule catalogue
 
 Every check \`mcp-stateless\` performs against MCP ${TARGET_REVISION}, with the
 changelog entry it enforces.
 
+## By area
+
+What the revision changed, and which checks cover each part of it.
+
+| Area | What changed | Rules |
+| --- | --- | --- |
+${AREAS.map(areaRow).join('\n')}
+
+## Who has to fix it
+
+Every rule declares an owner, and it is the most useful column in the table
+below. ${rules.length - application.length} of the ${rules.length} rules are
+protocol plumbing your MCP SDK owns: upgrading to a release that targets
+${TARGET_REVISION} resolves them with no change to your own code. Only
+${application.map((r) => `[${r.id}](${r.id}.md)`).join(', ')} can ever be
+something you wrote.
+
+So the order to work in is fixed: upgrade the SDK, re-run the check, and then
+look at what is left — rather than reading a list of eighteen findings, most of
+which describe code you did not write.
+
 ## Breaking
 
 A server failing any of these will not work with 2026-07-28 clients.
 
-| Rule | Severity | Check | Transports |
-| --- | --- | --- | --- |
+| Rule | Severity | Check | Fixed by | Transports |
+| --- | --- | --- | --- | --- |
 ${errors.map(row).join('\n')}
 
 ## Deprecations and advisories
 
 These still work today, but are scheduled for removal or degrade behaviour.
 
-| Rule | Severity | Check | Transports |
-| --- | --- | --- | --- |
+| Rule | Severity | Check | Fixed by | Transports |
+| --- | --- | --- | --- | --- |
 ${warnings.map(row).join('\n')}
 
 ## Not yet covered

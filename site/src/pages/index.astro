@@ -83,15 +83,50 @@ const RULES = [
   },
 ];
 
+/**
+ * The probe sequence, in the order it actually runs.
+ *
+ * The site never said what the tool *does* — a visitor had to infer black-box
+ * probing from the output. Naming the real methods keeps this a description
+ * rather than a diagram: these are the requests on the wire.
+ */
+const HOW = [
+  {
+    verb: 'Connect',
+    what: 'Start your server over stdio, or point at its Streamable HTTP endpoint.',
+    wire: '--stdio "node dist/server.js"',
+  },
+  {
+    verb: 'Probe',
+    what: 'Send a fixed, ordered set of protocol requests. Never one of your tools.',
+    wire: 'server/discover → tools/list → initialize',
+  },
+  {
+    verb: 'Observe',
+    what: 'Record every response, header and error code exactly as it came back.',
+    wire: '18 exchanges, kept verbatim',
+  },
+  {
+    verb: 'Evaluate',
+    what: 'Run each rule against that one shared transcript. No rule re-probes.',
+    wire: '18 rules · independent · id order',
+  },
+  {
+    verb: 'Explain',
+    what: 'Report what was found, what the revision requires, and the concrete fix.',
+    wire: 'found / expected / fix / spec',
+  },
+];
+
 const STATS = [
   { n: '18', label: 'rules, each citing a changelog entry' },
-  { n: '14', label: 'checks in a single stdio run' },
+  { n: '262', label: 'tests across 14 suites' },
   { n: '0', label: 'runtime dependencies', accent: true },
   { n: '5', label: 'defects this found in itself, all fixed', accent: true },
 ];
 
 const description =
-  'Point it at a running MCP server and it reports which of the 2026-07-28 stateless breaking changes that server fails — with the wire traffic that proves each one, and whether it is your bug or your SDK’s.';
+  'MCP compliance checking for the stateless 2026-07-28 revision. Point it at a running MCP server and it reports which breaking changes that server fails — with the wire traffic that proves each one, and whether the fix belongs to your code or your SDK. Protocol conformance for MCP migration, usable in CI.';
 ---
 
 <StarlightPage
@@ -125,33 +160,62 @@ const description =
 
       <CommandBar client:load command='npx mcp-stateless --stdio "node dist/server.js"' />
 
+      <p class="reassure">
+        No install. No telemetry. No tool execution. Point it at a running server.
+      </p>
+
+      <ol class="flow" aria-label="What the tool does, end to end">
+        <li>Your running server</li>
+        <li>mcp-stateless</li>
+        <li>18 rules</li>
+        <li class="flow-verdict">READY / NOT READY</li>
+      </ol>
+
       <ReportTabs client:load />
     </section>
 
-    <!-- What changed ─────────────────────────────────────────────────── -->
+    <!-- The problem ──────────────────────────────────────────────────── -->
     <section class="band">
-      <p class="eyebrow">What changed · 6 removed, 6 added</p>
-      <h2 class="title">The largest breaking change in the protocol's history.</h2>
+      <p class="eyebrow">The problem</p>
+      <h2 class="title">Your SDK version is not your server's behaviour.</h2>
       <p class="intro">
-        Revision 2026-07-28 made MCP stateless. Every server has to migrate, on a
-        twelve-month deprecation clock, and the specification shipped no tooling to tell
-        an author where their server stands.
+        A dependency bump compiles. A changelog says the release targets the new revision.
+        Neither tells you what your server puts on the wire — whether a handler you never
+        wrote is still registered, whether a field the specification now requires is
+        actually present in your results.
+      </p>
+      <p class="intro">
+        <span class="punch">So this does not read your code.</span> It starts your server, holds
+        a real protocol conversation with it, and reports what came back. The subject is the
+        server you actually run, not the version number you installed.
+      </p>
+    </section>
+
+    <!-- How it works ─────────────────────────────────────────────────── -->
+    <section class="band">
+      <p class="eyebrow">How it works · five steps, no configuration</p>
+      <h2 class="title">A conversation, then a verdict.</h2>
+      <p class="intro">
+        The sequence is fixed and the same every run, which is what makes two runs
+        comparable. It never calls one of your tools — tools have side effects, and a
+        conformance check that books a meeting to find out whether booking works is not a
+        check anyone can run against production.
       </p>
 
-      <div class="changed">
-        <div class="changed-col">
-          <p class="changed-head removed">Removed</p>
-          <ul class="changed-list">
-            {REMOVED.map((item) => <li>{item}</li>)}
-          </ul>
-        </div>
-        <div class="changed-col">
-          <p class="changed-head added">Added</p>
-          <ul class="changed-list">
-            {ADDED.map((item) => <li>{item}</li>)}
-          </ul>
-        </div>
-      </div>
+      <ol class="how">
+        {
+          HOW.map((step, i) => (
+            <li class="how-step">
+              <span class="how-n">{String(i + 1).padStart(2, '0')}</span>
+              <span class="how-body">
+                <b>{step.verb}</b>
+                <span class="how-what">{step.what}</span>
+                <code class="how-wire">{step.wire}</code>
+              </span>
+            </li>
+          ))
+        }
+      </ol>
     </section>
 
     <!-- The ledger ───────────────────────────────────────────────────── -->
@@ -162,6 +226,12 @@ const description =
         You never wrote a <code>ping</code> handler — your SDK registered one. So every rule
         declares who owns the fix, and the verdict splits on that line. This is the run from
         the tab above, itemised.
+      </p>
+
+      <p class="verdict-card">
+        <span class="verdict-card-n">8 findings</span>
+        <span class="chip chip-sdk">8 SDK-owned</span>
+        <span class="chip chip-app">0 application-owned</span>
       </p>
 
       <div class="ledger">
@@ -231,6 +301,32 @@ const description =
       <a class="more" href={urlForSlug('rules')}>All 18 rules, with a page each →</a>
     </section>
 
+    <!-- What changed ─────────────────────────────────────────────────── -->
+    <section class="band">
+      <p class="eyebrow">What changed · 6 removed, 6 added</p>
+      <h2 class="title">The largest breaking change in the protocol's history.</h2>
+      <p class="intro">
+        Revision 2026-07-28 made MCP stateless. Every server has to migrate, on a
+        twelve-month deprecation clock, and the specification shipped no tooling to tell
+        an author where their server stands.
+      </p>
+
+      <div class="changed">
+        <div class="changed-col">
+          <p class="changed-head removed">Removed</p>
+          <ul class="changed-list">
+            {REMOVED.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+        <div class="changed-col">
+          <p class="changed-head added">Added</p>
+          <ul class="changed-list">
+            {ADDED.map((item) => <li>{item}</li>)}
+          </ul>
+        </div>
+      </div>
+    </section>
+
     <!-- Proven ───────────────────────────────────────────────────────── -->
     <section class="band">
       <p class="eyebrow">Proven against real servers</p>
@@ -252,6 +348,15 @@ const description =
           ))
         }
       </div>
+
+      <p class="intro cohort">
+        <span class="punch">Measured, not asserted.</span> A weekly job probes a version-pinned
+        cohort of the official servers and commits the verdicts. The first run: four of four
+        reachable, none ready, 33 breaking findings — and
+        <b>every one of them resolved by an SDK upgrade</b>, none needing a change to the
+        server author's own code. The snapshot stores verdicts and rule ids only, never
+        anyone's wire traffic.
+      </p>
 
       <a class="more" href={urlForSlug('migration-walkthrough')}>
         Read the walkthrough — one server, seven findings to READY →
