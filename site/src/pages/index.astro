@@ -2,7 +2,7 @@
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
 import CommandBar from '../components/CommandBar';
 import ReportTabs from '../components/ReportTabs';
-import { ACTION_REF, NPM_URL, REPO_URL, urlForSlug } from '../docs-manifest';
+import { ACTION_REF, REPO_URL, urlForSlug } from '../docs-manifest';
 import '../styles/landing.css';
 
 const REMOVED = [
@@ -143,19 +143,19 @@ const description =
       <p class="eyebrow">MCP conformance · revision 2026-07-28</p>
 
       <h2 class="display">
-        Your MCP server stopped being compliant on <span class="date">2026-07-28</span>.
+        Is your MCP server <span class="date">actually</span> ready for the stateless revision?
       </h2>
 
       <p class="lede">
-        The protocol went stateless. The handshake, sessions, <code>ping</code> and per-resource
-        subscriptions were all removed. One command tells you exactly what your server fails
-        — and usually, that none of it is your code.
+        Test the server you actually run — not the SDK version you installed. One command
+        probes real protocol behaviour and reports what fails, what to change, and whether
+        the fix belongs to your code or your SDK.
       </p>
 
       <div class="hero-actions">
         <a class="btn btn-primary" href={urlForSlug('usage')}>Get started</a>
-        <a class="btn" href={REPO_URL}>View on GitHub</a>
-        <a class="btn" href={NPM_URL}>npm</a>
+        <a class="btn" href={urlForSlug('rules')}>View the 18 rules</a>
+        <a class="btn" href={REPO_URL}>GitHub</a>
       </div>
 
       <CommandBar client:load command='npx mcp-stateless --stdio "node dist/server.js"' />
