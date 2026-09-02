@@ -1,0 +1,98 @@
+# Opens a version-bump branch so a release can go through the PR flow that
+# branch protection now requires.
+#
+# Deliberately stops at pushing the branch rather than opening the PR itself.
+# Events created with GITHUB_TOKEN do not trigger further workflows, so a PR
+# opened here would sit forever with none of its six required checks reported
+# and could never merge. A human opening the PR triggers them normally, so this
+# hands back a prefilled link instead. The alternative — a PAT with push rights
+# stored as a secret — would put back the long-lived credential that trusted
+# publishing just removed.
+name: Prepare release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Fail here rather than after a branch exists and a PR is open.
+      - name: Verify the tree is releasable
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run format:check
+          npm run docs:check
+          npm test
+          npm run build
+
+      - name: Bump the version and push a branch
+        id: bump
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # --no-git-tag-version on purpose: the tag must land on the squashed
+          # commit on main, not on this branch.
+          npm version "${{ inputs.bump }}" --no-git-tag-version >/dev/null
+          VERSION=$(node -p "require('./package.json').version")
+          BRANCH="release/${VERSION}"
+
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::error::Branch $BRANCH already exists. Delete it or pick a different bump."
+            exit 1
+          fi
+
+          git checkout -b "$BRANCH"
+          git commit -am "${VERSION}"
+          git push -u origin "$BRANCH"
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=$BRANCH"   >> "$GITHUB_OUTPUT"
+
+      - name: Next steps
+        env:
+          V: ${{ steps.bump.outputs.version }}
+          B: ${{ steps.bump.outputs.branch }}
+        run: |
+          {
+            echo "## Release ${V} prepared"
+            echo
+            echo "Branch \`${B}\` is pushed with the version bump."
+            echo
+            echo "**1. Open the PR** — this link prefills it. Opening it yourself is what"
+            echo "makes the required checks run; a PR opened by CI would never get them."
+            echo
+            echo "  https://github.com/${GITHUB_REPOSITORY}/compare/main...${B}?expand=1&title=${V}"
+            echo
+            echo "**2. Merge once the six checks pass** (squash)."
+            echo
+            echo "**3. Tag the merged commit** to publish:"
+            echo
+            echo '```bash'
+            echo "git checkout main && git pull && git tag v${V} && git push origin v${V}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
