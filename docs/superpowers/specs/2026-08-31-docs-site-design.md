@@ -25,22 +25,26 @@ files.
 ## Non-goals
 
 - **No CMS, no backend, no analytics.** The site stays a static build.
-- **No versioned docs.** One version, the current one. Revisit at 1.0.0.
+- **No versioned docs.** One version, the current one. Revisited at 1.0.0 and
+  kept: a per-major docs site is ongoing maintenance a single-command CLI does
+  not earn, and the rule catalogue is generated from the rule sources, so the
+  published docs cannot drift from the release they describe. Readers needing an
+  older rule set have the tag.
 - **No blog.**
 - **No duplicated content.** If a page exists in the repository, the site
   renders that file rather than a copy of it. See "Content pipeline".
 
 ## Decisions taken
 
-| Question                      | Decision                                                         |
-| ----------------------------- | ---------------------------------------------------------------- |
-| Scope                         | Full docs site, not a restyled landing                           |
+| Question                      | Decision                                                          |
+| ----------------------------- | ----------------------------------------------------------------- |
+| Scope                         | Full docs site, not a restyled landing                            |
 | Framework                     | Astro + Starlight; React kept for existing interactive components |
-| Where does content live?      | Stays in `docs/`; the site reads it in place                     |
-| Theme                         | Dark and light, auto-detecting                                   |
-| Home page                     | WinUtil's section rhythm, carrying this project's own thesis     |
-| Hosting                       | GitHub Pages project path, base `/mcp-stateless/`                |
-| How does the landing coexist? | `<StarlightPage template="splash">`                              |
+| Where does content live?      | Stays in `docs/`; the site reads it in place                      |
+| Theme                         | Dark and light, auto-detecting                                    |
+| Home page                     | WinUtil's section rhythm, carrying this project's own thesis      |
+| Hosting                       | GitHub Pages project path, base `/mcp-stateless/`                 |
+| How does the landing coexist? | `<StarlightPage template="splash">`                               |
 
 ## Architecture
 
@@ -75,19 +79,19 @@ site/
 
 ### What the loader reads
 
-| Source                     | Route                       |
-| -------------------------- | --------------------------- |
-| `docs/rules/README.md`     | `/rules/`                   |
-| `docs/rules/MCP0NN.md`     | `/rules/mcp0nn/`            |
+| Source                          | Route                     |
+| ------------------------------- | ------------------------- |
+| `docs/rules/README.md`          | `/rules/`                 |
+| `docs/rules/MCP0NN.md`          | `/rules/mcp0nn/`          |
 | `docs/migration-walkthrough.md` | `/migration-walkthrough/` |
-| `docs/ARCHITECTURE.md`     | `/architecture/`            |
-| `docs/usage.md` (new)      | `/usage/`                   |
-| `docs/faq.md` (new)        | `/faq/`                     |
-| `docs/ci.md` (new)         | `/ci/`                      |
-| `CONTRIBUTING.md`          | `/contributing/`            |
-| `SECURITY.md`              | `/security/`                |
-| `CHANGELOG.md`             | `/changelog/`               |
-| `CODE_OF_CONDUCT.md`       | `/code-of-conduct/`         |
+| `docs/ARCHITECTURE.md`          | `/architecture/`          |
+| `docs/usage.md` (new)           | `/usage/`                 |
+| `docs/faq.md` (new)             | `/faq/`                   |
+| `docs/ci.md` (new)              | `/ci/`                    |
+| `CONTRIBUTING.md`               | `/contributing/`          |
+| `SECURITY.md`                   | `/security/`              |
+| `CHANGELOG.md`                  | `/changelog/`             |
+| `CODE_OF_CONDUCT.md`            | `/code-of-conduct/`       |
 
 `docs/superpowers/**` is excluded — specs and plans are working documents, not
 published pages.
@@ -111,13 +115,13 @@ exactly one content source and they are useful to a reader on GitHub too.
 A **remark plugin, not a regular expression** — it walks the AST, so relative
 paths inside fenced code blocks and inline code are never touched.
 
-| In the repository                  | On the site                        |
-| ---------------------------------- | ---------------------------------- |
-| `MCP001.md`                        | `/mcp-stateless/rules/mcp001/`     |
-| `rules/README.md#not-yet-covered`  | `/mcp-stateless/rules/#not-yet-covered` |
-| `../README.md`                     | `/mcp-stateless/`                  |
-| `../../CONTRIBUTING.md`            | `/mcp-stateless/contributing/`     |
-| anything unmapped                  | the GitHub blob URL, plus a build warning |
+| In the repository                 | On the site                               |
+| --------------------------------- | ----------------------------------------- |
+| `MCP001.md`                       | `/mcp-stateless/rules/mcp001/`            |
+| `rules/README.md#not-yet-covered` | `/mcp-stateless/rules/#not-yet-covered`   |
+| `../README.md`                    | `/mcp-stateless/`                         |
+| `../../CONTRIBUTING.md`           | `/mcp-stateless/contributing/`            |
+| anything unmapped                 | the GitHub blob URL, plus a build warning |
 
 The fallback row is deliberate: an unmapped link degrades to a URL that works
 rather than a 404, and still reports itself at build time.
@@ -143,12 +147,12 @@ code is identical either way, which is why the clean version is attempted first.
 
 **Sidebar**
 
-| Group          | Pages                                                       |
-| -------------- | ----------------------------------------------------------- |
-| Getting started | Overview, Usage, In CI, FAQ                                 |
-| Rules          | Catalogue, then MCP001–MCP018                               |
-| Guides         | Migration walkthrough                                       |
-| Project        | Architecture, Contributing, Security, Changelog, Conduct    |
+| Group           | Pages                                                    |
+| --------------- | -------------------------------------------------------- |
+| Getting started | Overview, Usage, In CI, FAQ                              |
+| Rules           | Catalogue, then MCP001–MCP018                            |
+| Guides          | Migration walkthrough                                    |
+| Project         | Architecture, Contributing, Security, Changelog, Conduct |
 
 Eighteen rule pages listed flat under one group is a long sidebar, and that is
 correct: the catalogue is the product, and a reader arriving from a finding
@@ -210,13 +214,13 @@ CLI's own encoding and carries meaning rather than decoration.
 
 ## Verification
 
-| Check                | How                                                       |
-| -------------------- | ---------------------------------------------------------- |
-| Loader spike         | One rule page: title, sidebar, TOC, highlighting, search   |
-| No broken links      | Build warns on unmapped `.md` targets; warnings treated as failures |
-| Every doc reachable  | Page count equals the loader's file count                  |
-| Light theme contrast | Severity colours checked against the light surface for AA  |
-| Search               | Pagefind returns a rule page for a rule id query           |
+| Check                | How                                                                  |
+| -------------------- | -------------------------------------------------------------------- |
+| Loader spike         | One rule page: title, sidebar, TOC, highlighting, search             |
+| No broken links      | Build warns on unmapped `.md` targets; warnings treated as failures  |
+| Every doc reachable  | Page count equals the loader's file count                            |
+| Light theme contrast | Severity colours checked against the light surface for AA            |
+| Search               | Pagefind returns a rule page for a rule id query                     |
 | Deploy               | Pages build green, home and a rule page load under `/mcp-stateless/` |
 
 ## Out of scope
