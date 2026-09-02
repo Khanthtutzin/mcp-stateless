@@ -44,6 +44,8 @@ OPTIONS
 
   --format <fmt>        text (default), json, sarif, markdown.
   --output <file>       Write the report to a file instead of stdout.
+  --emit <fmt>:<file>   Also write this format to this file. Repeatable, and
+                        renders from the same single probe.
   --verbose             Include the JSON-RPC traffic behind each finding.
   --no-color            Disable ANSI colour.
 
@@ -57,7 +59,7 @@ OPTIONS
 
 EXIT CODES
   0  ready              1  findings at or above --fail-on
-  2  usage or connection error
+  2  usage error, unreachable server, or an --emit file that could not be written
 
 EXAMPLES
   mcp-stateless --stdio "node dist/server.js"
@@ -89,6 +91,43 @@ function parseHeaders(values: string[]): Record<string, string> {
   return headers;
 }
 
+const FORMATS = ['text', 'json', 'sarif', 'markdown'] as const;
+type Format = (typeof FORMATS)[number];
+
+interface Emit {
+  format: Format;
+  path: string;
+}
+
+/**
+ * Parse `--emit <format>:<file>` pairs.
+ *
+ * Split on the FIRST colon only, so a Windows path keeps its drive letter:
+ * `json:C:\reports\out.json` is a format of `json` and a path of
+ * `C:\reports\out.json`.
+ */
+export function parseEmits(values: string[]): Emit[] {
+  return values.map((raw) => {
+    const idx = raw.indexOf(':');
+    if (idx === -1) {
+      throw new Error(
+        `Malformed --emit "${raw}". Expected "<format>:<file>", e.g. --emit json:report.json.`,
+      );
+    }
+    const format = raw.slice(0, idx).trim().toLowerCase();
+    const path = raw.slice(idx + 1).trim();
+    if (!FORMATS.includes(format as Format)) {
+      throw new Error(
+        `Unknown format "${format}" in --emit "${raw}". Expected one of: ${FORMATS.join(', ')}.`,
+      );
+    }
+    if (!path) {
+      throw new Error(`Missing file path in --emit "${raw}".`);
+    }
+    return { format: format as Format, path };
+  });
+}
+
 function parseRuleIds(csv: string | undefined, flag: string): string[] | undefined {
   if (!csv) return undefined;
   const ids = csv
@@ -117,6 +156,7 @@ export async function main(argv: string[]): Promise<number> {
         cwd: { type: 'string' },
         format: { type: 'string', default: 'text' },
         output: { type: 'string' },
+        emit: { type: 'string', multiple: true, default: [] },
         verbose: { type: 'boolean', default: false },
         // `node:util.parseArgs` has no notion of `--no-x` negation, so the
         // documented `--no-color` has to be its own option.
@@ -175,10 +215,14 @@ export async function main(argv: string[]): Promise<number> {
   let only: string[] | undefined;
   let skip: string[] | undefined;
   let headers: Record<string, string>;
+  let emits: Emit[];
   try {
     only = parseRuleIds(opts.only, '--only');
     skip = parseRuleIds(opts.skip, '--skip');
     headers = parseHeaders(opts.header as string[]);
+    // Validated before anything is probed: a typo in a CI config should fail
+    // instantly, not after spawning someone's server.
+    emits = parseEmits(opts.emit as string[]);
   } catch (err) {
     process.stderr.write(`${(err as Error).message}\n`);
     return EXIT_USAGE;
@@ -201,29 +245,35 @@ export async function main(argv: string[]): Promise<number> {
     const report = await runChecks(transport, { only, skip, timeoutMs });
     const version = packageVersion();
 
-    let output: string;
-    switch (format) {
-      case 'json':
-        output = renderJson(report, version);
-        break;
-      case 'sarif':
-        output = renderSarif(report, version);
-        break;
-      case 'markdown':
-        output = renderMarkdown(report);
-        break;
-      default:
-        output = renderTerminal(report, {
-          // Honour --no-color and the NO_COLOR convention, and never emit
-          // escapes when stdout is redirected to a file or a pipe.
-          color:
-            !opts['no-color'] &&
-            opts.color !== false &&
-            !process.env['NO_COLOR'] &&
-            process.stdout.isTTY === true,
-          verbose: opts.verbose,
-        });
-    }
+    /**
+     * Render one format from the report already in hand. Every rendering — the
+     * one on stdout and every `--emit` file — comes from this single
+     * `RunReport`, so they cannot describe different probes.
+     */
+    const render = (fmt: Format, color: boolean): string => {
+      switch (fmt) {
+        case 'json':
+          return renderJson(report, version);
+        case 'sarif':
+          return renderSarif(report, version);
+        case 'markdown':
+          return renderMarkdown(report);
+        default:
+          return renderTerminal(report, { color, verbose: opts.verbose });
+      }
+    };
+
+    const withNewline = (text: string) => (text.endsWith('\n') ? text : `${text}\n`);
+
+    const output = render(
+      format as Format,
+      // Honour --no-color and the NO_COLOR convention, and never emit escapes
+      // when stdout is redirected to a file or a pipe.
+      !opts['no-color'] &&
+        opts.color !== false &&
+        !process.env['NO_COLOR'] &&
+        process.stdout.isTTY === true,
+    );
 
     if (opts.output) {
       writeFileSync(opts.output, output.endsWith('\n') ? output : `${output}\n`, 'utf8');
@@ -232,9 +282,30 @@ export async function main(argv: string[]): Promise<number> {
       process.stdout.write(output.endsWith('\n') ? output : `${output}\n`);
     }
 
+    // Emitted after the report has been delivered, so a bad path in a CI config
+    // costs the artefact but never the diagnostic output the user came for.
+    // A file never gets ANSI escapes, whatever the terminal supports.
+    let emitFailed = false;
+    for (const emit of emits) {
+      try {
+        writeFileSync(emit.path, withNewline(render(emit.format, false)), 'utf8');
+      } catch (err) {
+        emitFailed = true;
+        process.stderr.write(
+          `Could not write --emit ${emit.format}:${emit.path} — ${(err as Error).message}\n`,
+        );
+      }
+    }
+
     // A server we could not reach is an operational failure, not a conformance
     // verdict, so it gets the usage exit code rather than the findings one.
     if (report.unreachable) return EXIT_USAGE;
+    // A probe that lost some of its answers is not a verdict either, whatever
+    // --fail-on says: an empty findings list from a server that stopped talking
+    // would otherwise exit 0 under a report that reads INCOMPLETE.
+    if (report.incomplete) return EXIT_USAGE;
+    // Same reasoning for an artefact a CI job asked for and did not get.
+    if (emitFailed) return EXIT_USAGE;
     if (failOn === 'never') return EXIT_OK;
     if (failOn === 'warning') {
       return report.errorCount + report.warningCount > 0 ? EXIT_FINDINGS : EXIT_OK;

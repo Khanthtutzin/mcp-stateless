@@ -338,7 +338,7 @@ to watch for it, not to start editing.
 In CI:
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v1
+- uses: Khanthtutzin/mcp-stateless@v0.1.5
   with:
     stdio: node dist/server.js
     fail-on: error

@@ -3,7 +3,18 @@ name: Deploy site
 on:
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/pages.yml']
+    # The site renders the repository's own Markdown, so a docs edit has to
+    # redeploy it. Working documents under docs/superpowers/ are not published
+    # and must not trigger a deploy.
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - '!docs/superpowers/**'
+      - 'CONTRIBUTING.md'
+      - 'SECURITY.md'
+      - 'CHANGELOG.md'
+      - 'CODE_OF_CONDUCT.md'
+      - '.github/workflows/pages.yml'
   workflow_dispatch:
 
 # Pages needs an OIDC identity to deploy, same mechanism as npm publishing.

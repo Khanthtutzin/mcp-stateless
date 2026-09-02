@@ -50,6 +50,8 @@
     "lint": "eslint .",
     "docs:rules": "node scripts/gen-rule-docs.mjs",
     "docs:check": "node scripts/gen-rule-docs.mjs --check",
+    "index:aggregate": "node scripts/aggregate-index.mjs",
+    "index:scan": "node scripts/scan-index.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepublishOnly": "npm run build"

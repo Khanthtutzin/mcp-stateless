@@ -1,10 +1,88 @@
 # mcp-stateless — project guide
 
-An orientation document: what this project is, how it is built, how the pieces
-fit together, and how work flows through it. The [README](../README.md) is the
-user-facing pitch; [CONTRIBUTING](../CONTRIBUTING.md) is the recipe for adding
-a rule. This is the map in between — read it once and the rest of the codebase
-should feel obvious.
+What this project is, how it is built, how the pieces fit together, and how work
+flows through it. The [README](../README.md) is the user-facing pitch;
+[CONTRIBUTING](../CONTRIBUTING.md) is the recipe for adding a rule. This is the
+map in between — the document to hand a teammate who needs to understand the
+whole thing, not just the file they are editing.
+
+**Reading paths**
+
+| If you are…                       | Read                            |
+| --------------------------------- | ------------------------------- |
+| explaining the project to someone | §0, §1, §2, then §15            |
+| about to write a rule             | §0, §5, §6, §7, §10, §11        |
+| touching transports or the CLI    | §4, §5, §8, §9                  |
+| reviewing a PR                    | §7 (findings), §13 (invariants) |
+| deciding whether to adopt it      | §1, §2, §15                     |
+
+---
+
+## 0. The one-minute version
+
+> MCP — the protocol LLM clients use to talk to tool servers — released a
+> revision on **28 July 2026** that made the protocol stateless. It deleted the
+> connection handshake, deleted sessions, deleted four methods, renumbered the
+> error codes, and made a new method mandatory. Thousands of existing MCP servers
+> are now non-compliant, on a twelve-month deprecation clock, and the spec
+> shipped **no tooling** to tell an author where their server stands.
+>
+> `mcp-stateless` is that tooling. You point it at a running server; it holds a
+> real conversation with it, and reports precisely which of the breaking changes
+> that server fails — with the wire traffic that proves each one, the spec link
+> behind it, the concrete fix, and — the part maintainers actually care about —
+> whether it is _their_ bug or their _SDK's_.
+
+**If your team remembers three things:**
+
+1. **It probes behaviour, not source code.** No parsing, no config-file reading,
+   no version-string trust. It asks the server questions and judges the answers,
+   so it cannot be lied to.
+2. **It tells you who has to fix it.** Against a stock-SDK server, most findings
+   are protocol plumbing the SDK owns — they disappear on upgrade. Splitting the
+   report on that line turns "10 failures" into "1 thing to do".
+3. **It refuses to guess.** A server it cannot reach produces zero findings, not
+   eighteen. Where the spec permits two behaviours, it reports neither. Being
+   confidently wrong is the one failure mode that would kill adoption.
+
+### A five-minute demo
+
+The fastest way to explain it is to run it. Everything below works from a clean
+clone with no server of your own:
+
+```bash
+npm install && npm run build
+
+# 1. A compliant server — exits 0, says READY.
+node dist/cli/index.js --stdio "node test/fixtures/servers/stdio-server.mjs modern"
+
+# 2. A 2025-era server — exits 1, itemises every break and who owns it.
+node dist/cli/index.js --stdio "node test/fixtures/servers/stdio-server.mjs legacy"
+
+# 3. The same run, showing the JSON-RPC traffic behind each verdict.
+node dist/cli/index.js --stdio "node test/fixtures/servers/stdio-server.mjs legacy" --verbose
+
+# 4. A server that does not start — exits 2, and invents nothing.
+node dist/cli/index.js --stdio "node --eval \"process.exit(1)\"" --timeout 2000
+```
+
+Run 2 next to run 4 is the whole design argument in ten seconds: the tool is
+loud when it has evidence and silent when it does not.
+
+For the long-form version — a real server taken from 7 breaking findings to
+READY, including what the tool got wrong — see the
+[migration walkthrough](migration-walkthrough.md).
+
+### What has shipped
+
+`0.1.0` through `0.1.5`, all on 2026-08-18: 18 rules, both transports, four
+report formats, a GitHub Action, a landing page, and the migration walkthrough.
+`0.1.3` was the first release containing fixes found by contact with a real
+migrated server rather than with fixtures — five defects, because the fixtures
+had encoded the same assumptions as the rules. `0.1.4` moved publishing to npm
+**trusted publishing** (OIDC), so every version from there carries signed
+provenance and no release token exists to leak. See the
+[CHANGELOG](../CHANGELOG.md).
 
 ---
 
@@ -55,7 +133,55 @@ distinction is what turns a wall of 10 failures into a task list of 1.
 
 ---
 
-## 2. The stack
+## 2. Why the version is a date
+
+`2026-07-28` **is** the version number. MCP versions its specification by
+**publication date** — `YYYY-MM-DD` — not by semver. There is no "MCP 3.0"; there
+is the revision cut on 28 July 2026, and the revisions cut before it. From
+[src/protocol.ts](../src/protocol.ts):
+
+```ts
+export const TARGET_REVISION = '2026-07-28';
+export const LEGACY_REVISIONS = ['2025-11-25', '2025-06-18', '2025-03-26'] as const;
+```
+
+This trips up nearly everyone new to the project, so it is worth the paragraph:
+
+- **A spec is not a library.** Semver encodes one publisher's compatibility
+  promise about one artifact. A protocol revision is a _negotiated_ snapshot: a
+  client at one revision talks to a server at another, written by strangers. The
+  useful question at negotiation time is not "was this breaking" but "which
+  snapshot is this, and is it older or newer than mine". A date answers that.
+- **It ends the major-vs-minor argument.** Dates carry no compatibility claim, so
+  the changelog carries it instead — honest, and it is why this tool exists as a
+  separate artifact from the spec.
+- **Ordering is free.** ISO 8601 sorts lexicographically in the same order it
+  sorts chronologically, so `'2026-07-28' > '2025-11-25'` is a plain string
+  comparison. No parsing, no version objects. Treat the string as an opaque
+  identifier you compare, never one you do arithmetic on.
+- **SDKs still use semver**, and lag. The reference TypeScript SDK's `1.30.0`
+  predates the spec by a day. That lag is exactly why the `sdk` /
+  `application` remediation split (§1) is the most useful thing the report does.
+
+### Where the date travels on the wire
+
+This is the part `2026-07-28` changed, and it is why the string is so visible
+throughout the codebase:
+
+| Before                                                                    | After                                                                                  |
+| ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| sent **once** in `initialize` as `protocolVersion`, kept in session state | sent on **every request** in `_meta` as `io.modelcontextprotocol/protocolVersion`      |
+| —                                                                         | advertised by the server from `server/discover` as `supportedVersions: ["2026-07-28"]` |
+| —                                                                         | echoed in the `MCP-Protocol-Version` HTTP header                                       |
+
+Statelessness forced that: with no handshake to remember, every request has to
+name its own revision. Which is also why [MCP002](../src/rules/MCP002.ts) can
+detect a stateful server at all — it checks whether the server reads the version
+from `_meta` or from memory it should no longer have.
+
+---
+
+## 3. The stack
 
 Deliberately small. **Zero runtime dependencies**, and that is a hard rule — a
 tool that runs in other people's CI should not drag a tree into it.
@@ -69,14 +195,31 @@ tool that runs in other people's CI should not drag a tree into it.
 | HTTP            | built-in `fetch` + `ReadableStream`                           | SSE is parsed by hand from `data:` frames                                  |
 | Child processes | `node:child_process.spawn`, never `shell: true`               | Command strings are tokenized by us, so behaviour matches across platforms |
 | Terminal colour | ~12 lines of hand-rolled ANSI                                 | Not worth a dependency                                                     |
-| Tests           | Vitest 2                                                      | Real fixture servers, real stdio, real sockets — no mocks                  |
+| Tests           | Vitest 3                                                      | Real fixture servers, real stdio, real sockets — no mocks                  |
 | Lint / format   | ESLint 9 (flat config) + Prettier                             | `format:check` runs in CI                                                  |
 | Docs            | `scripts/gen-rule-docs.mjs`                                   | `docs/rules/*.md` generated from rule JSDoc; CI fails if stale             |
 | Distribution    | npm package (`bin` + `exports`) and a composite GitHub Action | One code path, three front doors                                           |
+| Website         | Astro 7 + Starlight, in `site/`                               | Its **own** package, deliberately not a workspace — see below              |
+
+The one dependency-heavy corner is the website, and it is fenced off on
+purpose: `site/` has a separate `package.json`, `package-lock.json`, ESLint and
+Prettier config, and is **not** a workspace of the root package. A workspace
+would hoist Astro and React into the root lockfile and make "zero runtime
+dependencies" a claim that needed asterisks. It is checked and deployed by its
+own workflow, and the published npm package never sees it.
+
+The site does not keep its own copy of the documentation. A custom Astro
+content loader (`site/src/loaders/repo-docs.ts`) reads `docs/` and the
+published root Markdown **in place**, taking each page's title from its `# H1`,
+and a Sätteri mdast plugin rewrites the relative `.md` links — written for a
+GitHub reader — into site URLs. One file, two renderings: what you read on
+GitHub and what the site serves can never drift, because they are the same
+bytes. `site/src/docs-manifest.ts` is the single map from repository path to
+site route, and both halves read it.
 
 ---
 
-## 3. Repo map
+## 4. Repo map
 
 ```
 src/
@@ -104,15 +247,29 @@ test/
   fixtures/servers/stdio-server.mjs, http-server.mjs
   fixtures/fakebin/               a fake `.cmd` shim, for the Windows spawn tests
 
-docs/rules/          generated rule pages
-scripts/             the docs generator
-action.yml           composite GitHub Action
-.github/workflows/   ci.yml, release.yml
+site/                  Astro + Starlight website — its own package, own lockfile
+  src/loaders/         reads docs/ in place; no copy of the documentation exists
+  src/docs-manifest.ts the one map from repository path to site route
+  src/pages/index.astro  the landing page
+index/                 the compliance index — committed data, not build output
+  targets.json         the curated cohort, every version pinned by a reviewer
+  runs/<date>.json     one snapshot per weekly scan: verdicts only, no evidence
+  history.json         append-only trend, one row per scan date
+docs/
+  ARCHITECTURE.md      this file
+  usage.md             the CLI reference
+  ci.md                the GitHub Action guide
+  faq.md               questions the report tends to raise
+  migration-walkthrough.md   a real server taken from 7 findings to READY
+  rules/               generated rule pages, one per MCP0NN
+scripts/               docs generator · index scanner · index aggregator
+action.yml             composite GitHub Action
+.github/workflows/     ci.yml · release.yml · pages.yml · index.yml
 ```
 
 ---
 
-## 4. Architecture
+## 5. Architecture
 
 Four layers, and the dependency arrows only point one way.
 
@@ -163,7 +320,7 @@ exact traffic behind a verdict instead of asking you to trust one.
 
 ---
 
-## 5. What one run actually does
+## 6. What one run actually does
 
 ### Step 1 — the prelude
 
@@ -221,7 +378,7 @@ can change a verdict.
 
 ---
 
-## 6. Anatomy of a rule
+## 7. Anatomy of a rule
 
 A rule is metadata plus one `run` function ([rules/types.ts](../src/rules/types.ts)):
 
@@ -283,7 +440,7 @@ note is left in place on purpose.
 
 ---
 
-## 7. Transports
+## 8. Transports
 
 Both implement the same `Transport` interface, so `run.ts` and every rule are
 transport-agnostic; `appliesTo` handles the checks that only make sense on one.
@@ -349,7 +506,7 @@ on Windows, which CI caught and a local run never would.
 
 ---
 
-## 8. Reporting and exit codes
+## 9. Reporting and exit codes
 
 | Format     | Purpose                                                                                                                                                                                                  |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -359,12 +516,36 @@ on Windows, which CI caught and a local run never would.
 | `markdown` | For a PR comment or `$GITHUB_STEP_SUMMARY`.                                                                                                                                                              |
 
 **Exit codes:** `0` ready · `1` findings at or above `--fail-on` · `2` usage
-error or unreachable server. Keeping unreachable at `2` matters: a broken launch
-should never be mistaken for a conformance verdict.
+error, unreachable server, or a probe that could not be completed. Keeping those
+last two at `2` matters: a broken launch should never be mistaken for a
+conformance verdict.
+
+### Three states, not two
+
+A run ends in one of three states, and conflating any two of them produces a
+number that reads as a verdict and is not one.
+
+| State         | What happened                             | How it is reported                      |
+| ------------- | ----------------------------------------- | --------------------------------------- |
+| measured      | every probe got an answer                 | findings, `ready`, exit `0` or `1`      |
+| `unreachable` | **no** probe got an answer                | no checks run, exit `2`                 |
+| `incomplete`  | some probes got answers and some got none | findings shown, never `ready`, exit `2` |
+
+The middle state was always handled. The third was not, and the gap was not
+theoretical: every rule treats an unanswered probe as telling it nothing and
+reports no finding — correct for the rule, wrong for the run. A server that
+answered the first probe correctly and then exited therefore came back with zero
+errors and `ready: true`, a green verdict drawn from roughly one rule in
+eighteen. `RunReport.incomplete` now records how many probes went unanswered and
+why, no run carrying it is ever `ready`, and the compliance index files such a
+target as not measurable rather than as passing.
+
+JSON consumers get an `incomplete` object alongside `unreachable`; anything
+reading `ready: false` as "has findings" should check it first.
 
 ---
 
-## 9. Testing strategy
+## 10. Testing strategy
 
 **No mocks.** Every rule is exercised against real fixture MCP servers over real
 stdio and real HTTP sockets.
@@ -409,7 +590,7 @@ preference.
 
 ---
 
-## 10. Development workflow
+## 11. Development workflow
 
 ```bash
 npm install         # no runtime deps to install; devDeps only
@@ -442,7 +623,7 @@ export, or the generator will not find it.
 
 ---
 
-## 11. CI and release workflow
+## 12. CI and release workflow
 
 **[ci.yml](../.github/workflows/ci.yml)** — on push to `main`, every PR, and
 manual dispatch. Three jobs:
@@ -456,21 +637,82 @@ manual dispatch. Three jobs:
   server exits `1`, an unreachable server exits `2` without inventing findings,
   and SARIF output parses.
 
-**[release.yml](../.github/workflows/release.yml)** — on a `v*` tag: typecheck,
-lint, test and build must pass first (never publish something that fails its own
-suite), the tag must match the `package.json` version, then `npm publish
---provenance` and a GitHub release.
+**[release.yml](../.github/workflows/release.yml)** — on a `v*` tag. Four gates
+before anything leaves the runner, each of which has caught something real:
 
-**[action.yml](../action.yml)** is a composite action wrapping the CLI. It runs
-`mcp-stateless` up to three times on purpose: once as JSON to populate the `ready` /
-`errors` / `warnings` step outputs, once in whatever format the user asked to
-see, and once as markdown into `$GITHUB_STEP_SUMMARY`. Each run uses `--fail-on
-never`, and the action applies the `fail-on` policy itself — so the step's
-pass/fail decision is made in one place.
+1. **The suite must pass** — typecheck, lint, `format:check`, `docs:check`, test,
+   build. Never publish something that fails its own checks.
+2. **The tag must match `package.json`.**
+3. **The manifest must survive npm's publish-time normalisation.** npm rewrites
+   the manifest more aggressively at publish than at pack; a `./` prefix on `bin`
+   was silently dropped once, which would have shipped a CLI with no executable.
+   The workflow greps `--dry-run` for `auto-corrected` and fails the release.
+4. **Publish via npm trusted publishing (OIDC).** No `NODE_AUTH_TOKEN` exists —
+   authentication is the workflow's own identity, and provenance is attested
+   automatically (so `--provenance` is neither needed nor allowed). Two
+   non-obvious requirements are load-bearing and documented in the file itself:
+   `setup-node` must **not** be given `registry-url`, because the `.npmrc` it
+   writes leaves a configured-but-empty credential that npm reads as "auth is
+   handled" and never falls back to OIDC; and npm itself must be upgraded past
+   the runner's bundled version, which predates OIDC support and reports the
+   failure as missing auth.
+
+**[pages.yml](../.github/workflows/pages.yml)** — deploys `site/` to GitHub
+Pages. Its path filter covers `docs/**` and the published root Markdown as well
+as `site/**`, because the site renders those files directly: a documentation
+edit has to redeploy the page that shows it. Working documents under
+`docs/superpowers/` are excluded, since they are not published. It runs the
+site's **own** lint, format and build (the root suite does not cover the site),
+uses `site/package-lock.json` for its cache, and queues concurrent deploys
+rather than cancelling them so `main` always wins. Same OIDC mechanism as
+publishing.
+
+**[index.yml](../.github/workflows/index.yml)** — probes the curated cohort in
+`index/targets.json` every Monday and commits the result.
+
+It is **two jobs on purpose**, and the split is the whole security argument. The
+`scan` job executes third-party code — every server in the cohort, downloaded
+from npm — so it holds nothing worth taking: `permissions: {}`,
+`persist-credentials: false`, no secrets, and no npm cache to poison. It hands a
+snapshot to `commit` as an artefact. The `commit` job holds `contents: write`
+and therefore never installs or runs a target; it reads one JSON file, which
+`aggregate-index.mjs` validates against an allow-list before anything else
+happens.
+
+That job also passes `--runs-dir` rather than deriving the run filename itself.
+The obvious shell form —
+`date="$(node -p "require('./snapshot.json').scannedAt.slice(0,10)")"` — puts an
+unvalidated field from a file produced alongside third-party code inside a
+double-quoted string, where `$( )` still expands, in the one job that can push.
+The aggregator builds the path in Node from a date it has already validated.
+
+The property is asserted, not just reviewed:
+[test/index-workflow.test.ts](../test/index-workflow.test.ts) parses the YAML and
+fails if the scan job gains a permission, a cache, a secret or a `git push`, if
+the commit job gains a build or a scan, or if either drifts back to shell
+interpolation. Fifteen mutations of the workflow were each caught by it.
+
+Only verdicts and rule ids are stored, never evidence — republishing other
+projects' wire traffic would be both bulky and rude, and every row can be
+reproduced with one printed command.
+
+**[action.yml](../action.yml)** is a composite action wrapping the CLI. It
+probes **once**, with `--fail-on never`, and uses repeatable `--emit` to render
+three things from that single run: the user's chosen format to stdout, JSON to a
+temp file for the `ready` / `errors` / `warnings` step outputs, and markdown into
+`$GITHUB_STEP_SUMMARY`. The action then applies the `fail-on` policy itself, so
+the step's pass/fail decision is made in one place.
+
+It used to invoke the CLI three times — one probe per rendering — which meant a
+flaky server could return three different verdicts and leave the step outputs
+contradicting the report a human was reading. It also pinned the CLI to whatever
+npm called latest, so `uses: …@v1` pinned the action but not the checker; the
+action now resolves the version it was released with from its own
+`$GITHUB_ACTION_PATH/package.json`, overridable via the `version` input.
 
 ---
 
-## 12. Invariants worth not breaking
+## 13. Invariants worth not breaking
 
 1. **Zero runtime dependencies.** If a change seems to need one, open an issue.
 2. **Rules see only a `ProbeContext`.** No transports, no sockets, no ordering
@@ -491,7 +733,67 @@ pass/fail decision is made in one place.
 
 ---
 
-## 13. Where it goes next
+## 14. Questions your team will ask
+
+**Is there a backend? A database? A service to deploy?**
+No, and that is a design position rather than an unfinished task. There are
+exactly two runtimes: the npm package, which runs on a developer's machine or
+inside **their** CI, and a static site on a CDN. No accounts, no API, no stored
+state — which is fitting for a tool that checks whether other people removed
+theirs. It matters practically: the checker is used against servers on
+`localhost`, behind a VPN, or in a CI network with no egress, so a hosted probe
+could not reach most real targets anyway. Anything that ever does need a server
+(dashboards, history, billing) has to sit **beside** the package, never beneath
+it — the package must keep working if the rest is deleted.
+
+**Why not use an MCP SDK to do the talking?**
+Because an SDK abstracts away precisely what needs observing. It performs the
+handshake for you, normalises error codes, and hides headers — so a server that
+only works _because_ the SDK papered over it would look compliant. Hand-rolled
+JSON-RPC is the only way to see the wire as it is.
+
+**Isn't this what MCP Inspector does?**
+Inspector is for exploring a server interactively. This answers one question
+non-interactively, with an exit code: does this server survive `2026-07-28`?
+General conformance is explicitly out of scope.
+
+**Why not just static analysis of the server's source?**
+It would have to understand every SDK, every version, and every wrapper anyone
+writes around them — and would still not know what the server actually does at
+runtime. Probing is both simpler and more honest.
+
+**How do we know a rule is right?**
+Each rule is tested in both directions against hand-written fixture servers (one
+built to 2025-11-25, one to 2026-07-28), and the whole tool is run against the
+official `@modelcontextprotocol/*` servers. The bar is zero false positives and
+zero rule crashes; a confirmed false positive is a bug, not a preference. `0.1.3`
+exists because contact with a real migrated server found five defects the
+fixtures could not — they had encoded the same assumptions as the rules.
+
+**What happens when the spec changes again?**
+Every version-specific constant lives in [protocol.ts](../src/protocol.ts), so a
+new revision starts as a single-file change (see §15). Rule ids are permanent, so
+existing `--skip` lists in other people's CI keep meaning what they meant.
+
+**Can it break our build?**
+Only if you let it: `--fail-on error` (default), `warning`, or `never`, plus
+`--only` / `--skip` per rule. And it never calls a tool — tools have side
+effects. It checks the protocol envelope, not your logic.
+
+**Does it send anything anywhere?**
+No network calls beyond the server you point it at. Nothing is uploaded, and
+there is nowhere for it to be uploaded to.
+
+**Why zero dependencies — isn't that dogma?**
+It runs in other people's CI. Every dependency is a supply-chain surface they
+inherit by installing your tool, and the things that would have been dependencies
+(arg parsing, HTTP, colour) are ~200 lines against Node built-ins. The one
+dependency-heavy corner, the landing page, is fenced into its own package with
+its own lockfile for exactly this reason.
+
+---
+
+## 15. Where it goes next
 
 - **A future revision.** Add constants to `protocol.ts`, then decide whether the
   target revision becomes a flag rather than a constant.
@@ -506,7 +808,7 @@ pass/fail decision is made in one place.
 
 ---
 
-## 14. Glossary
+## 16. Glossary
 
 | Term                 | Meaning                                                                                                                       |
 | -------------------- | ----------------------------------------------------------------------------------------------------------------------------- |

@@ -79,3 +79,21 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
+
+      # Consumers write `uses: Khanthtutzin/mcp-stateless@v1`, which only works
+      # if a `v1` tag exists and keeps moving. Prereleases are excluded: a tag
+      # like v1.1.0-rc.1 must never become what `@v1` resolves to. Skipped
+      # entirely for 0.x, where no stable major tag should exist yet.
+      - name: Move the major version tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          case "$tag" in
+            *-*) echo "Prerelease $tag — not moving a major tag."; exit 0 ;;
+            v0.*) echo "Pre-1.0 release $tag — no major tag until 1.0.0."; exit 0 ;;
+          esac
+          major="${tag%%.*}"
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "$major" "$tag"
+          git push origin "refs/tags/$major" --force
+          echo "$major now points at $tag."

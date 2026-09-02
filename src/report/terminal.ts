@@ -90,7 +90,19 @@ export function renderTerminal(report: RunReport, options: TerminalOptions = {})
   const appErrors = errors.length - sdkErrors;
 
   const checked = report.outcomes.length;
-  if (report.ready) {
+  if (report.incomplete) {
+    const { failed, probes, reason } = report.incomplete;
+    lines.push(
+      `${c.red('INCOMPLETE')} — ${failed} of ${probes} probes got no answer, so this is not a verdict.`,
+    );
+    lines.push(c.dim(`  First failure: ${reason}`));
+    lines.push(
+      c.dim(
+        '  Anything listed above is real, but the checks that went unanswered ' +
+          'reported nothing either way. Re-run once the server stays up.',
+      ),
+    );
+  } else if (report.ready) {
     const suffix = warnings.length
       ? ` ${c.dim(`(${warnings.length} advisory item${warnings.length === 1 ? '' : 's'})`)}`
       : '';

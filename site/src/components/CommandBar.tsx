@@ -1,43 +1,35 @@
 import { useState } from 'react';
 
 /** A copyable shell command. The prompt is decoration; only the command copies. */
-export default function CommandBar({
-  command,
-  className = '',
-}: {
-  command: string;
-  className?: string;
-}) {
-  const [copied, setCopied] = useState(false);
+export default function CommandBar({ command }: { command: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   async function copy() {
     try {
       await navigator.clipboard.writeText(command);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      setState('copied');
+      setTimeout(() => setState('idle'), 1600);
     } catch {
-      // Clipboard blocked (insecure context, or denied). The text is
-      // selectable, so say that rather than failing silently.
-      setCopied(false);
+      // Clipboard blocked — insecure context, or the user denied it. The text
+      // is selectable, so say so rather than failing silently.
+      setState('failed');
+      setTimeout(() => setState('idle'), 2400);
     }
   }
 
   return (
-    <div
-      className={`flex items-stretch overflow-hidden rounded-xl border border-line bg-panel-2 ${className}`}
-    >
-      <code className="flex-1 overflow-x-auto whitespace-nowrap px-4 py-3.5 font-mono text-[0.8rem] sm:text-[0.9rem]">
-        <span className="text-ready">npx </span>
+    <div className="cmd">
+      <code className="cmd-text">
+        <span className="cmd-npx">npx </span>
         {command.replace(/^npx /, '')}
       </code>
       <button
         type="button"
         onClick={copy}
-        className={`shrink-0 cursor-pointer border-l border-line px-4 font-mono text-[0.7rem] tracking-[0.1em] uppercase transition-colors hover:bg-panel hover:text-paper ${
-          copied ? 'text-ready' : 'text-muted'
-        }`}
+        className="cmd-copy"
+        data-copied={state === 'copied'}
       >
-        {copied ? 'Copied' : 'Copy'}
+        {state === 'copied' ? 'Copied' : state === 'failed' ? 'Select it' : 'Copy'}
       </button>
     </div>
   );

@@ -17,6 +17,11 @@ export interface JsonReport {
   ready: boolean;
   /** Present only when the server never answered; no checks were run. */
   unreachable?: string;
+  /**
+   * Present when some probes got no answer, so the run is not a verdict. A
+   * consumer treating `ready: false` as "has errors" should read this first.
+   */
+  incomplete?: { probes: number; failed: number; reason: string };
   summary: {
     checks: number;
     errors: number;
@@ -53,6 +58,7 @@ export function toJsonReport(report: RunReport, version: string): JsonReport {
     durationMs: report.durationMs,
     ready: report.ready,
     ...(report.unreachable ? { unreachable: report.unreachable } : {}),
+    ...(report.incomplete ? { incomplete: report.incomplete } : {}),
     summary: {
       checks: report.outcomes.length,
       errors: report.errorCount,

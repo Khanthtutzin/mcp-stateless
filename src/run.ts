@@ -38,6 +38,27 @@ export interface RunReport {
    * server that failed to start would be actively misleading.
    */
   unreachable?: string;
+  /**
+   * Set when the server answered some probes and not others.
+   *
+   * Between "answered everything" and "never answered at all" there is a case
+   * that matters: a server that replies correctly and then dies, or stops
+   * replying, partway through. Every rule treats a probe that got no answer as
+   * telling us nothing and reports no finding — which is right for the rule and
+   * wrong for the run, because the result is zero errors from a probe that was
+   * mostly not carried out. Without this, such a server was reported ready.
+   *
+   * A run this is set on is never `ready`: we cannot certify what we did not
+   * manage to ask.
+   */
+  incomplete?: {
+    /** Requests we expected an answer to. */
+    probes: number;
+    /** How many of them got none. */
+    failed: number;
+    /** The first transport failure, which is usually the cause of the rest. */
+    reason: string;
+  };
   /** Out-of-band notes from the transport, e.g. child-process stderr. */
   diagnostics: string[];
 }
@@ -127,6 +148,21 @@ export async function runChecks(
   const errorCount = findings.filter((f) => f.severity === 'error').length;
   const warningCount = findings.filter((f) => f.severity === 'warning').length;
 
+  // Recomputed over the whole transcript, not just the prelude: the rules add
+  // to it as they run, and a server that goes away halfway through does so
+  // after the prelude has already succeeded. Any answerless probe makes the
+  // run incomplete, because JSON-RPC gives a server no way to legitimately
+  // stay silent — every request it receives is owed a response.
+  const lost = ctx.transcript.filter((ex) => ex.transportError);
+  const incomplete =
+    lost.length > 0
+      ? {
+          probes: ctx.transcript.length,
+          failed: lost.length,
+          reason: lost[0]!.transportError!,
+        }
+      : undefined;
+
   return {
     target: transport.target,
     transport: transport.kind,
@@ -137,7 +173,9 @@ export async function runChecks(
     findings,
     errorCount,
     warningCount,
-    ready: errorCount === 0,
+    // An incomplete run cannot be certified, whatever the findings say.
+    ready: errorCount === 0 && !incomplete,
+    ...(incomplete ? { incomplete } : {}),
     diagnostics: transport.diagnostics(),
   };
 }

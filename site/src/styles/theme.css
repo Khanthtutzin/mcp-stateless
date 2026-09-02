@@ -1,0 +1,131 @@
+/**
+ * Site-wide theme, applied to the landing and to every documentation page.
+ *
+ * The palette is not a chosen accent scheme — it is the CLI's own severity
+ * encoding (× breaking, ! advisory, READY) lifted onto the page. Colour appears
+ * only where it carries that meaning, which is why there are three accents
+ * rather than one, and why nothing decorative is tinted.
+ *
+ * No font is fetched. The package ships zero runtime dependencies and the site
+ * makes zero external requests, which also removes any flash of unstyled text.
+ */
+
+:root {
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono:
+    ui-monospace, 'SF Mono', SFMono-Regular, 'Cascadia Mono', 'JetBrains Mono', Menlo,
+    Consolas, monospace;
+
+  /* Dark is the default: this is a terminal tool, and the report it renders
+     was written for a dark background. */
+  --ink: #0b0e17;
+  --panel: #0f1424;
+  --raise: #131829;
+  --line: #232a42;
+  --paper: #edeff5;
+  --muted: #7c859e;
+  --break: #ff6b5b;
+  --advisory: #ffc24b;
+  --ready: #5ce08a;
+  --link: #8fb4ff;
+
+  /* Severity colours at 12% over the surface, for row tints and badges. */
+  --break-wash: #ff6b5b1f;
+  --ready-wash: #5ce08a1f;
+  --advisory-wash: #ffc24b1f;
+
+  /* The hero's ruled ground. Faint enough to read as paper rather than as a
+     pattern — it should register only once you look for it. */
+  --grid: #ffffff12;
+  --glow: #8fb4ff1f;
+}
+
+/**
+ * Light is designed rather than derived. The dark severity colours are tuned
+ * for a near-black ground and fail contrast on a pale one, so each is re-picked
+ * to hold the same meaning at 4.5:1 or better against `--panel`.
+ */
+:root[data-theme='light'] {
+  --ink: #f6f7fb;
+  --panel: #ffffff;
+  --raise: #eef1f8;
+  --line: #d8deec;
+  --paper: #10141f;
+  --muted: #556080;
+  --break: #c22d1c;
+  --advisory: #855200;
+  --ready: #0d6b46;
+  --link: #2b52c7;
+
+  --break-wash: #c22d1c14;
+  --ready-wash: #0d6b4614;
+  --advisory-wash: #85520014;
+
+  --grid: #10141f14;
+  --glow: #2b52c714;
+}
+
+/* Starlight's own tokens, pointed at the palette above so every built-in
+   component inherits it without per-component overrides. */
+:root,
+:root[data-theme='light'] {
+  --sl-font: var(--font-sans);
+  --sl-font-mono: var(--font-mono);
+
+  --sl-color-bg: var(--ink);
+  --sl-color-bg-nav: var(--panel);
+  --sl-color-bg-sidebar: var(--ink);
+  --sl-color-bg-inline-code: var(--raise);
+  --sl-color-text: var(--paper);
+  --sl-color-white: var(--paper);
+  --sl-color-gray-1: var(--paper);
+  --sl-color-gray-2: var(--paper);
+  --sl-color-gray-3: var(--muted);
+  --sl-color-gray-4: var(--muted);
+  --sl-color-gray-5: var(--line);
+  --sl-color-gray-6: var(--raise);
+  --sl-color-gray-7: var(--panel);
+  --sl-color-hairline: var(--line);
+  --sl-color-hairline-light: var(--line);
+  --sl-color-hairline-shade: var(--line);
+
+  --sl-color-accent: var(--link);
+  --sl-color-accent-high: var(--paper);
+  --sl-color-accent-low: var(--raise);
+  --sl-color-text-accent: var(--link);
+}
+
+/**
+ * Headings are set in the utility face across the whole site. The tool's entire
+ * output is a terminal report, so the machine voice leads and the human prose
+ * is the annotation — the inverse of the usual developer-tool page.
+ */
+.sl-markdown-content :is(h1, h2, h3, h4, h5, h6),
+.content-panel h1,
+h1.page-title {
+  font-family: var(--font-mono);
+  letter-spacing: -0.025em;
+  font-weight: 700;
+}
+
+/* Rule ids read as identifiers, so keep them from being softened. */
+.sl-markdown-content code {
+  font-variant-ligatures: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ready);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
