@@ -633,9 +633,33 @@ export async function scanTargets(targets, opts) {
     schemaVersion: 1,
     scannedAt: now().toISOString(),
     toolVersion: opts.toolVersion,
+    ...(opts.toolCommit ? { toolCommit: opts.toolCommit } : {}),
     rulesetSize: opts.rulesetSize,
     results,
   };
+}
+
+/**
+ * The commit this checkout is at, or `undefined` outside a git checkout.
+ *
+ * Actions sets GITHUB_SHA; locally, ask git. Anything that is not a full
+ * lowercase object id is dropped rather than recorded, since the aggregator
+ * would reject the whole snapshot over it.
+ */
+export function currentCommit(
+  env = process.env,
+  run = () => execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }),
+) {
+  let sha = env.GITHUB_SHA;
+  if (!sha) {
+    try {
+      sha = run();
+    } catch {
+      return undefined;
+    }
+  }
+  sha = sha.trim();
+  return /^[0-9a-f]{40}$/.test(sha) ? sha : undefined;
 }
 
 // --- CLI -------------------------------------------------------------------
@@ -726,6 +750,7 @@ async function cli(argv) {
     timeoutMs,
     budgetMs,
     toolVersion: pkg.version,
+    toolCommit: currentCommit(),
     rulesetSize: lib.ALL_RULES.length,
   });
 

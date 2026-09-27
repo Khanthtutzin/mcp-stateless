@@ -19,14 +19,29 @@ import { fileURLToPath } from 'node:url';
  * inspected.
  */
 
-/** The only keys a snapshot may carry. */
+/** The only keys a snapshot may carry. `toolCommit` is optional. */
 const SNAPSHOT_KEYS = [
   'schemaVersion',
   'scannedAt',
   'toolVersion',
+  'toolCommit',
   'rulesetSize',
   'results',
 ];
+
+/**
+ * A full git object id. `toolVersion` comes from package.json, so a scan run
+ * from `main` between releases carries the last release's number while running
+ * newer rules; the commit is what says which code actually produced a row.
+ *
+ * Exactly 40 lowercase hex characters, because this value comes from the job
+ * that runs third-party code and ends up in a committed file.
+ */
+const COMMIT = /^[0-9a-f]{40}$/;
+
+function isCommit(value) {
+  return typeof value === 'string' && COMMIT.test(value);
+}
 
 /** The only keys a result may carry, and how each is validated. */
 const RESULT_FIELDS = {
@@ -148,6 +163,11 @@ export function parseRunSnapshot(text) {
       `Snapshot toolVersion must be a non-empty string, got ${JSON.stringify(raw.toolVersion)}.`,
     );
   }
+  if ('toolCommit' in raw && !isCommit(raw.toolCommit)) {
+    throw new Error(
+      `Snapshot toolCommit must be a 40-character lowercase hex commit id, got ${JSON.stringify(raw.toolCommit)}.`,
+    );
+  }
   if (!Number.isInteger(raw.rulesetSize) || raw.rulesetSize < 1) {
     throw new Error(
       `Snapshot rulesetSize must be a positive integer, got ${JSON.stringify(raw.rulesetSize)}.`,
@@ -223,6 +243,7 @@ export function summarise(snapshot) {
   return {
     date: snapshot.scannedAt.slice(0, 10),
     toolVersion: snapshot.toolVersion,
+    ...(snapshot.toolCommit ? { toolCommit: snapshot.toolCommit } : {}),
     rulesetSize: snapshot.rulesetSize,
     cohortSize: results.length,
     measured: measured.length,
@@ -252,6 +273,14 @@ const ROW_FIELDS = {
   ruleFailureCounts: 'counts',
 };
 
+/**
+ * Keys a history row may carry but need not. Rows written before a field
+ * existed stay valid: the history is append-only, so they cannot be backfilled.
+ */
+const OPTIONAL_ROW_FIELDS = {
+  toolCommit: 'commit',
+};
+
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** Validate one history-row field, returning an error message or null. */
@@ -269,6 +298,8 @@ function checkRowField(kind, value) {
     }
     case 'text':
       return isText(value) ? null : 'must be a non-empty string';
+    case 'commit':
+      return isCommit(value) ? null : 'must be a 40-character lowercase hex commit id';
     case 'positive':
       return Number.isInteger(value) && value > 0 ? null : 'must be a positive integer';
     case 'count':
@@ -327,10 +358,20 @@ export function parseHistory(text) {
       throw new Error(`History row at index ${index} must be an object.`);
     }
     const named = `History row ${JSON.stringify(row.date ?? `#${index}`)}`;
-    rejectUnknownKeys(Object.keys(row), Object.keys(ROW_FIELDS), named);
+    rejectUnknownKeys(
+      Object.keys(row),
+      [...Object.keys(ROW_FIELDS), ...Object.keys(OPTIONAL_ROW_FIELDS)],
+      named,
+    );
 
-    for (const [field, kind] of Object.entries(ROW_FIELDS)) {
-      if (!(field in row)) throw new Error(`${named} is missing ${field}.`);
+    for (const [field, kind] of Object.entries({
+      ...ROW_FIELDS,
+      ...OPTIONAL_ROW_FIELDS,
+    })) {
+      if (!(field in row)) {
+        if (field in OPTIONAL_ROW_FIELDS) continue;
+        throw new Error(`${named} is missing ${field}.`);
+      }
       const problem = checkRowField(kind, row[field]);
       if (problem) {
         throw new Error(

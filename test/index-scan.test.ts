@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { parseRunSnapshot } from '../scripts/aggregate-index.mjs';
 import {
   createProbe,
+  currentCommit,
   loadTargets,
   scanTargets,
   toResult,
@@ -719,5 +720,36 @@ describe('createProbe attributes our own bugs to us', () => {
       { timeoutMs: 1000 },
     );
     expect(snapshot.results[0]!.unreachable).toMatch(/^probe failed: /);
+  });
+});
+
+describe('currentCommit — the provenance a row carries', () => {
+  const SHA = '8e0c0588a1b2c3d4e5f60718293a4b5c6d7e8f90';
+  const noGit = () => {
+    throw new Error('not a git repository');
+  };
+
+  it('prefers GITHUB_SHA, as Actions sets it', () => {
+    expect(currentCommit({ GITHUB_SHA: SHA }, noGit)).toBe(SHA);
+  });
+
+  it('falls back to git, trimming its newline', () => {
+    expect(currentCommit({}, () => `${SHA}\n`)).toBe(SHA);
+  });
+
+  it('records nothing outside a git checkout rather than failing the scan', () => {
+    expect(currentCommit({}, noGit)).toBeUndefined();
+  });
+
+  it('drops anything the aggregator would reject', () => {
+    // A bad value would get the whole snapshot rejected in the commit job.
+    expect(currentCommit({ GITHUB_SHA: 'abc123' }, noGit)).toBeUndefined();
+  });
+
+  it('ends up in the snapshot only when known', async () => {
+    const probe: ScanOptions['probe'] = () => Promise.reject(new Error('unused'));
+    const base = { probe, toolVersion: '0.0.0-test', rulesetSize: 1 };
+    expect((await scanTargets([], { ...base, toolCommit: SHA })).toolCommit).toBe(SHA);
+    expect('toolCommit' in (await scanTargets([], base))).toBe(false);
   });
 });

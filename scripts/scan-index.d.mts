@@ -100,9 +100,17 @@ export interface ScanOptions {
    */
   budgetMs?: number;
   toolVersion: string;
+  /** Full commit id of the checker, recorded when known. */
+  toolCommit?: string;
   rulesetSize: number;
   /** Injected so a snapshot can be given a fixed timestamp in tests. */
   now?: () => Date;
 }
+
+/** The checkout's commit, from GITHUB_SHA or git; undefined when neither gives a full id. */
+export function currentCommit(
+  env?: Record<string, string | undefined>,
+  run?: () => string,
+): string | undefined;
 
 export function scanTargets(targets: Target[], opts: ScanOptions): Promise<RunSnapshot>;

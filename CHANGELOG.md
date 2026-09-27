@@ -23,6 +23,12 @@ silently start suppressing a different check.
   Metadata inspection only: no authorization flow, and your `--header` values
   are never sent to the hosts the metadata names. A server without OAuth
   metadata is not affected. (#3)
+- Compliance index rows record `toolCommit`, the full commit id of the checker
+  that produced them. `toolVersion` comes from `package.json`, so a scan from
+  `main` between releases carried the last release's number while running
+  newer rules. The field is optional, so rows written before it stay valid,
+  and it is validated as 40 lowercase hex characters, because it comes from
+  the job that runs third-party code.
 
 ### Changed
 
