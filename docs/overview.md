@@ -285,7 +285,7 @@ attestation tying it to the workflow run and commit that built it.
 
 ## 7. Where the project stands
 
-Released: `0.1.0`, then `0.1.3` through `0.1.5`, then `0.2.0` and `0.3.0`.
+Released: `0.1.0`, then `0.1.3` through `0.1.5`, then `0.2.0`, `0.3.0` and `0.3.1`.
 
 The most informative release is **`0.1.3`**, which fixed five defects found by
 pointing the tool at a genuinely migrated server rather than at fixtures. Every
