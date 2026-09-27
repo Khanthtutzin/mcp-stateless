@@ -34,6 +34,11 @@ silently start suppressing a different check.
 
 ### Fixed
 
+- The weekly compliance index never recorded a scan. Its commit job pushed to
+  `main`, whose ruleset requires a pull request and CI, so every push was
+  rejected (`GH013`) and the 2026-09-07, -14 and -21 scans were lost. Results
+  now go to a dedicated `index-data` branch; `main` keeps only the cohort
+  (`index/targets.json`), and a test pins the push target.
 - A run that could not be completed is no longer reported as ready. A server
   that answered the first probe and then stopped came back with zero findings
   and exit `0`, because every rule treats an unanswered probe as telling it

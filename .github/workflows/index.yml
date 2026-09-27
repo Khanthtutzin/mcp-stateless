@@ -6,8 +6,8 @@ on:
     - cron: '0 6 * * 1'
   workflow_dispatch:
 
-# Never two at once: both jobs write to index/, and a second run racing the
-# first would either lose a row or fail to push.
+# Never two at once: a second run racing the first would either lose a row or
+# fail to push to index-data.
 concurrency:
   group: index
   cancel-in-progress: false
@@ -65,7 +65,19 @@ jobs:
     permissions:
       contents: write
     steps:
+      # main supplies the aggregator, and nothing is pushed back to it: main's
+      # ruleset requires a pull request and CI, which a bot push can never
+      # satisfy. So this checkout keeps no credentials.
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The data lives on its own branch, index-data, whose git log is the
+      # audit trail. This is the only checkout that can push.
+      - uses: actions/checkout@v7
+        with:
+          ref: index-data
+          path: data
 
       - uses: actions/setup-node@v7
         with:
@@ -80,12 +92,13 @@ jobs:
         run: |
           node scripts/aggregate-index.mjs \
             --snapshot snapshot.json \
-            --history index/history.json \
-            --runs-dir index/runs
+            --history data/index/history.json \
+            --runs-dir data/index/runs
 
       - name: Commit the run
+        working-directory: data
         run: |
-          rm -f snapshot.json
+          rm -f ../snapshot.json
           # --porcelain, not `git diff --quiet`: the new run file is untracked,
           # and a diff of tracked files alone would report "no change" on a
           # re-run whose history row came out identical.
