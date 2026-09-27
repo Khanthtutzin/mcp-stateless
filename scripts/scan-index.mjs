@@ -144,7 +144,7 @@ export function loadTargets(text, options = {}) {
   try {
     raw = JSON.parse(text);
   } catch (err) {
-    throw new Error(`Targets file is not valid JSON: ${err.message}`);
+    throw new Error(`Targets file is not valid JSON: ${err.message}`, { cause: err });
   }
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Targets file must be an object.');
@@ -268,7 +268,9 @@ export function resolveNpmBin(installDir, pkg, binName) {
   try {
     manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
   } catch (err) {
-    throw new Error(`Could not read the manifest for ${pkg}: ${err.message}`);
+    throw new Error(`Could not read the manifest for ${pkg}: ${err.message}`, {
+      cause: err,
+    });
   }
 
   const bin = manifest?.bin;
@@ -714,6 +716,7 @@ async function cli(argv) {
     throw new Error(
       `Could not load the library from ${values.lib} (${err.message}). ` +
         'Run "npm run build" first, or pass --lib.',
+      { cause: err },
     );
   }
 
