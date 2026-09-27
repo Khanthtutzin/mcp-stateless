@@ -50,7 +50,7 @@ describe('http — compliant 2026-07-28 server', () => {
 
   it('runs every http rule', async () => {
     const report = await checkHttp('modern');
-    expect(report.outcomes.length).toBe(19);
+    expect(report.outcomes.length).toBe(20);
   });
 });
 

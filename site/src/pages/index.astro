@@ -109,7 +109,7 @@ const HOW = [
   {
     verb: 'Evaluate',
     what: 'Run each rule against that one shared transcript. No rule re-probes.',
-    wire: '19 rules · independent · id order',
+    wire: '20 rules · independent · id order',
   },
   {
     verb: 'Explain',
@@ -154,7 +154,7 @@ const description =
 
       <div class="hero-actions">
         <a class="btn btn-primary" href={urlForSlug('usage')}>Get started</a>
-        <a class="btn" href={urlForSlug('rules')}>View the 19 rules</a>
+        <a class="btn" href={urlForSlug('rules')}>View the 20 rules</a>
         <a class="btn" href={REPO_URL}>GitHub</a>
       </div>
 
@@ -167,7 +167,7 @@ const description =
       <ol class="flow" aria-label="What the tool does, end to end">
         <li>Your running server</li>
         <li>mcp-stateless</li>
-        <li>19 rules</li>
+        <li>20 rules</li>
         <li class="flow-verdict">READY / NOT READY</li>
       </ol>
 
@@ -271,15 +271,15 @@ const description =
 
       <p class="ledger-note">
         <span class="punch">One dependency bump.</span> That is the whole remediation for this
-        server. Four of the nineteen rules do land on your code or configuration — MCP013, MCP015,
-        MCP017 and MCP019 — and this server tripped none of them. Knowing which column a finding
-        falls in is worth more than the list above it.
+        server. Five of the twenty rules do land on your code or configuration — MCP013, MCP015,
+        MCP017, MCP019 and MCP020 — and this server tripped none of them. Knowing which column
+        a finding falls in is worth more than the list above it.
       </p>
     </section>
 
     <!-- What it checks ───────────────────────────────────────────────── -->
     <section class="band">
-      <p class="eyebrow">19 rules · 14 breaking · 5 advisory</p>
+      <p class="eyebrow">20 rules · 14 breaking · 6 advisory</p>
       <h2 class="title">Every finding cites the change it enforces.</h2>
       <p class="intro">
         No heuristics and no opinions. Each rule maps to a named entry in the changelog,
@@ -298,7 +298,7 @@ const description =
         }
       </div>
 
-      <a class="more" href={urlForSlug('rules')}>All 19 rules, with a page each →</a>
+      <a class="more" href={urlForSlug('rules')}>All 20 rules, with a page each →</a>
     </section>
 
     <!-- What changed ─────────────────────────────────────────────────── -->
@@ -416,7 +416,7 @@ const description =
       <p class="intro">
         Exit <code>0</code> ready · <code>1</code> findings · <code>2</code> usage error, a
         probe that produced no verdict, or a file it could not write. A server it cannot reach
-        — or one that answers and then stops — produces no findings at all, rather than nineteen
+        — or one that answers and then stops — produces no findings at all, rather than twenty
         confident guesses.
       </p>
 
