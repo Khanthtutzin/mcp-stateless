@@ -11,6 +11,18 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+### Added
+
+- **MCP021** (error): tasks still served from the core protocol rather than the
+  `io.modelcontextprotocol/tasks` extension (Major change 6, SEP-2663).
+  Reports `tasks/list` and `tasks/result` answering a 2026-07-28 request, and
+  a core `capabilities.tasks` in `server/discover`: an error when the
+  extension is not advertised, a warning when both are. Also warns when
+  `tasks/get` is served with nothing advertised. Capabilities are read from
+  `server/discover` only, so a dual-era server's 2025-11-25 `initialize`
+  answer is not held against it. Calibrated against the official SDKs: caught
+  on a 1.30.1 server with tasks, silent on 2.1.0. (#2)
+
 ### Documentation
 
 - The README and docs site are titled "MCP Stateless Check", matching the
@@ -44,10 +56,11 @@ silently start suppressing a different check.
   metadata is not affected. (#3)
 - **MCP020** (warning, HTTP): an authorization server offers only deprecated
   Dynamic Client Registration (Deprecated 4). It warns when the metadata
-  advertises `registration_endpoint` without `client_id_metadata_document_supported:
-true`. An authorization server with neither is relying on pre-registration
-  and is not reported. Shares MCP019's discovery, cached per run, so the two
-  rules together make the same requests as one. (#4)
+  advertises `registration_endpoint` without
+  `client_id_metadata_document_supported: true`. An authorization server with
+  neither is relying on pre-registration and is not reported. Shares MCP019's
+  discovery, cached per run, so the two rules together make the same requests
+  as one. (#4)
 - Compliance index rows record `toolCommit`, the full commit id of the checker
   that produced them. `toolVersion` comes from `package.json`, so a scan from
   `main` between releases carried the last release's number while running

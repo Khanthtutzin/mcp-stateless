@@ -7,6 +7,10 @@ export type FixtureMode =
   | 'dual-era'
   | 'partial-cache'
   | 'tools-only'
+  | 'core-tasks'
+  | 'core-and-ext'
+  | 'tasks-ext'
+  | 'hidden-tasks'
   | 'oauth-no-iss'
   | 'oauth-iss'
   | 'oauth-challenge';

@@ -18,6 +18,7 @@ describe('stdio — legacy 2025-11-25 server', () => {
       'MCP009', // listChanged advertised, subscriptions/listen missing
       'MCP011', // -32002 for resource not found
       'MCP012', // -32004 not renumbered
+      'MCP021', // tasks/list still live
     ]);
   });
 
@@ -64,7 +65,7 @@ describe('stdio — compliant 2026-07-28 server', () => {
 
   it('runs every stdio rule', async () => {
     const report = await checkStdio('modern');
-    expect(report.outcomes.length).toBe(14);
+    expect(report.outcomes.length).toBe(15);
   });
 });
 
@@ -169,5 +170,58 @@ describe('stdio — dual-era server', () => {
     // no discover and a live initialize must stay an error.
     const report = await checkStdio('legacy', { only: ['MCP002'] });
     expect(report.findings.some((f) => f.severity === 'error')).toBe(true);
+  });
+});
+
+describe('MCP021 — tasks moved to the io.modelcontextprotocol/tasks extension', () => {
+  const mcp021 = (report: Awaited<ReturnType<typeof checkStdio>>) =>
+    report.findings.filter((f) => f.ruleId === 'MCP021');
+
+  it('reports tasks/list as still live on a legacy server', async () => {
+    const findings = mcp021(await checkStdio('legacy', { only: ['MCP021'] }));
+    const list = findings.find((f) => f.observed.startsWith('tasks/list'))!;
+    expect(list.severity).toBe('error');
+    // tasks/result is registered but rejected our unknown task id: the handler
+    // is still there, worded as a warning like every removed-method check.
+    const result = findings.find((f) => f.observed.startsWith('tasks/result'))!;
+    expect(result.severity).toBe('warning');
+  });
+
+  it('is an error when tasks are declared only in core capabilities', async () => {
+    const findings = mcp021(await checkStdio('core-tasks', { only: ['MCP021'] }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.severity).toBe('error');
+    expect(findings[0]!.observed).toMatch(/declares capabilities\.tasks/);
+    expect(findings[0]!.fix).toContain('capabilities.extensions');
+  });
+
+  it('is only a warning when the stale core key sits beside the extension', async () => {
+    const findings = mcp021(await checkStdio('core-and-ext', { only: ['MCP021'] }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.severity).toBe('warning');
+    expect(findings[0]!.fix).toMatch(/Remove capabilities\.tasks/);
+  });
+
+  it('warns when tasks/get is served but advertised nowhere', async () => {
+    const findings = mcp021(await checkStdio('hidden-tasks', { only: ['MCP021'] }));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]!.severity).toBe('warning');
+    expect(findings[0]!.observed).toMatch(/^tasks\/get returned/);
+  });
+
+  it('passes a server that advertises the extension', async () => {
+    const report = await checkStdio('tasks-ext', { only: ['MCP021'] });
+    expect(mcp021(report)).toEqual([]);
+    expect(report.ready).toBe(true);
+  });
+
+  it('passes a server with no tasks at all', async () => {
+    expect(mcp021(await checkStdio('modern', { only: ['MCP021'] }))).toEqual([]);
+  });
+
+  it('does not fault a dual-era server for its 2025-11-25 answers', async () => {
+    // Its initialize result is a legacy answer, where core tasks are correct;
+    // only server/discover speaks for the 2026-07-28 era.
+    expect(mcp021(await checkStdio('dual-era', { only: ['MCP021'] }))).toEqual([]);
   });
 });
