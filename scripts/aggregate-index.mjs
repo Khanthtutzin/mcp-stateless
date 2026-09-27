@@ -123,7 +123,7 @@ export function parseRunSnapshot(text) {
   try {
     raw = JSON.parse(text);
   } catch (err) {
-    throw new Error(`Snapshot is not valid JSON: ${err.message}`);
+    throw new Error(`Snapshot is not valid JSON: ${err.message}`, { cause: err });
   }
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('Snapshot must be an object.');
@@ -306,7 +306,7 @@ export function parseHistory(text) {
   try {
     raw = JSON.parse(text);
   } catch (err) {
-    throw new Error(`History is not valid JSON: ${err.message}`);
+    throw new Error(`History is not valid JSON: ${err.message}`, { cause: err });
   }
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('History must be an object.');
