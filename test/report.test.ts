@@ -67,7 +67,7 @@ describe('reporters', () => {
     expect(sarif.version).toBe('2.1.0');
     const run = sarif.runs[0];
     expect(run.tool.driver.name).toBe('mcp-stateless');
-    expect(run.tool.driver.rules.length).toBe(19);
+    expect(run.tool.driver.rules.length).toBe(20);
     expect(run.results.length).toBe(report.findings.length);
 
     // Every result must reference a declared rule, or GitHub drops it.

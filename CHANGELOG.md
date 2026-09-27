@@ -23,6 +23,12 @@ silently start suppressing a different check.
   Metadata inspection only: no authorization flow, and your `--header` values
   are never sent to the hosts the metadata names. A server without OAuth
   metadata is not affected. (#3)
+- **MCP020** (warning, HTTP): an authorization server offers only deprecated
+  Dynamic Client Registration (Deprecated 4). It warns when the metadata
+  advertises `registration_endpoint` without `client_id_metadata_document_supported:
+true`. An authorization server with neither is relying on pre-registration
+  and is not reported. Shares MCP019's discovery, cached per run, so the two
+  rules together make the same requests as one. (#4)
 - Compliance index rows record `toolCommit`, the full commit id of the checker
   that produced them. `toolVersion` comes from `package.json`, so a scan from
   `main` between releases carried the last release's number while running

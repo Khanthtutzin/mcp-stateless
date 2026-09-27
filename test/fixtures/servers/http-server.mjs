@@ -28,11 +28,13 @@ function readBody(req) {
  * OAuth discovery documents each oauth-* mode serves, keyed by path. Each mode
  * exercises a different step of the discovery order MCP019 must follow.
  *
- *   oauth-no-iss     root metadata; issuer with a path; flag absent
+ *   oauth-no-iss     root metadata; issuer with a path; iss flag absent;
+ *                    Dynamic Client Registration only
  *   oauth-iss        path-inserted metadata; issuer without a path, served
- *                    only at the OIDC fallback; flag true
+ *                    only at the OIDC fallback; iss flag true; DCR and CIMD
  *   oauth-challenge  metadata named by a 401 challenge; issuer found at the
- *                    third, path-appended candidate; flag false
+ *                    third, path-appended candidate; iss flag false; neither
+ *                    DCR nor CIMD (pre-registration)
  */
 function oauthDocuments(mode, origin) {
   switch (mode) {
@@ -46,6 +48,7 @@ function oauthDocuments(mode, origin) {
           issuer: `${origin}/tenant1`,
           authorization_endpoint: `${origin}/tenant1/authorize`,
           token_endpoint: `${origin}/tenant1/token`,
+          registration_endpoint: `${origin}/tenant1/register`,
         },
       };
     case 'oauth-iss':
@@ -58,6 +61,8 @@ function oauthDocuments(mode, origin) {
           issuer: origin,
           authorization_endpoint: `${origin}/authorize`,
           token_endpoint: `${origin}/token`,
+          registration_endpoint: `${origin}/register`,
+          client_id_metadata_document_supported: true,
           authorization_response_iss_parameter_supported: true,
         },
       };

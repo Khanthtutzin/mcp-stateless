@@ -70,7 +70,7 @@ This lets the checker distinguish different failures that can otherwise look sim
 
 ## 5. What does it check?
 
-The current project has **19 rules**: 14 breaking rules and 5 deprecations/advisories.
+The current project has **20 rules**: 14 breaking rules and 6 deprecations/advisories.
 
 Examples:
 
@@ -264,7 +264,7 @@ flowchart TB
     A[You have an MCP server] --> B[Run mcp-stateless]
     B --> C[Talk to the running server]
     C --> D[Observe protocol behaviour]
-    D --> E[Run 19 rules]
+    D --> E[Run 20 rules]
     E --> F{What did we find?}
     F -->|Nothing breaking| G[READY ✅]
     F -->|Breaking issues| H[NOT READY ❌]

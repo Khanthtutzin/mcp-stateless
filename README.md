@@ -174,7 +174,7 @@ what it still cannot tell you.
 
 ## What it checks
 
-**19 rules**, each tied to a named changelog entry and SEP. Full detail in
+**20 rules**, each tied to a named changelog entry and SEP. Full detail in
 [`docs/rules/`](docs/rules/README.md).
 
 <details>
@@ -202,7 +202,7 @@ what it still cannot tell you.
 </details>
 
 <details>
-<summary><b>Deprecations and advisories — 5 rules</b></summary>
+<summary><b>Deprecations and advisories — 6 rules</b></summary>
 
 <br>
 
@@ -213,6 +213,7 @@ what it still cannot tell you.
 | [MCP017](docs/rules/MCP017.md) | `tools/list` ordering not deterministic                | stdio, http | your code        |
 | [MCP018](docs/rules/MCP018.md) | Results do not identify the server via `_meta`         | stdio, http | SDK upgrade      |
 | [MCP019](docs/rules/MCP019.md) | Authorization server does not advertise RFC 9207 `iss` | http        | your auth server |
+| [MCP020](docs/rules/MCP020.md) | Authorization server offers only deprecated DCR        | http        | your auth server |
 
 </details>
 
@@ -221,13 +222,12 @@ what it still cannot tell you.
 
 <br>
 
-Some changes need an auth flow or an interactive scenario to probe honestly.
+Some changes need an interactive scenario to probe honestly.
 Checking them unreliably would be worse than not checking them, so they are
 tracked as issues instead:
 
 - [#1](https://github.com/Khanthtutzin/mcp-stateless/issues/1) Multi Round-Trip Request conformance — SEP-2322
 - [#2](https://github.com/Khanthtutzin/mcp-stateless/issues/2) Tasks extension migration — SEP-2663
-- [#4](https://github.com/Khanthtutzin/mcp-stateless/issues/4) Client ID Metadata Documents
 
 It also never calls a tool — tools have side effects. It checks the protocol
 envelope, not your logic.
@@ -286,7 +286,7 @@ requests:
 ```
 
 A server that never answers is reported `UNREACHABLE` with **no findings at
-all** — nineteen confident verdicts about a server that failed to start would be
+all** — twenty confident verdicts about a server that failed to start would be
 worse than nothing.
 
 </details>

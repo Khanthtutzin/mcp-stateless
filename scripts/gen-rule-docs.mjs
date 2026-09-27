@@ -157,7 +157,7 @@ const AREAS = [
   {
     name: 'Authorization',
     plain: 'What an OAuth-protected server publishes so a client can trust its tokens.',
-    ids: ['MCP019'],
+    ids: ['MCP019', 'MCP020'],
   },
 ];
 
@@ -220,7 +220,7 @@ ${application.map((r) => `[${r.id}](${r.id}.md)`).join(', ')} can ever be
 something you wrote.
 
 So the order to work in is fixed: upgrade the SDK, re-run the check, and then
-look at what is left — rather than reading a list of nineteen findings, most of
+look at what is left — rather than reading a list of twenty findings, most of
 which describe code you did not write.
 
 ## Breaking
@@ -241,12 +241,10 @@ ${warnings.map(row).join('\n')}
 
 ## Not yet covered
 
-Some 2026-07-28 changes need an auth flow or an interactive scenario to probe
-properly, and are deliberately left out rather than checked unreliably:
+Some 2026-07-28 changes need an interactive scenario to probe properly, and are deliberately left out rather than checked unreliably:
 
 - Multi Round-Trip Requests (\`InputRequiredResult\`) conformance — SEP-2322
 - Migration of tasks to the \`io.modelcontextprotocol/tasks\` extension — SEP-2663
-- Client ID Metadata Documents replacing Dynamic Client Registration
 
 Each has a tracking issue. Contributions welcome — see
 [CONTRIBUTING.md](../../CONTRIBUTING.md).

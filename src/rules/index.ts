@@ -17,6 +17,7 @@ import { MCP016 } from './MCP016.js';
 import { MCP017 } from './MCP017.js';
 import { MCP018 } from './MCP018.js';
 import { MCP019 } from './MCP019.js';
+import { MCP020 } from './MCP020.js';
 import type { Rule, TransportKind } from './types.js';
 
 /**
@@ -47,6 +48,7 @@ export const ALL_RULES: readonly Rule[] = [
   MCP017,
   MCP018,
   MCP019,
+  MCP020,
 ];
 
 export function rulesFor(kind: TransportKind): Rule[] {

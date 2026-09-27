@@ -158,3 +158,45 @@ describe('MCP019 against a stubbed fetcher', () => {
     expect(findings[0]!.observed).toContain('https://a.example.com');
   });
 });
+
+describe('MCP020 — Dynamic Client Registration without CIMD', () => {
+  it('warns when DCR is the only registration path offered', async () => {
+    const report = await checkHttp('oauth-no-iss', { only: ['MCP020'] });
+    expect(report.findings).toHaveLength(1);
+
+    const f = report.findings[0]!;
+    expect(f.severity).toBe('warning');
+    expect(f.remediation).toBe('application');
+    expect(f.observed).toMatch(/\/tenant1 .*advertises a registration_endpoint/);
+    expect(report.ready).toBe(true);
+  });
+
+  it('passes an authorization server that offers CIMD alongside DCR', async () => {
+    const report = await checkHttp('oauth-iss', { only: ['MCP020'] });
+    expect(report.findings).toEqual([]);
+  });
+
+  it('does not fault pre-registration, which offers neither', async () => {
+    const report = await checkHttp('oauth-challenge', { only: ['MCP020'] });
+    expect(report.findings).toEqual([]);
+  });
+
+  it('says nothing about a server that does not use OAuth', async () => {
+    const report = await checkHttp('modern', { only: ['MCP020'] });
+    expect(report.findings).toEqual([]);
+  });
+
+  it('shares one discovery with MCP019 rather than fetching twice', async () => {
+    const { startHttpFixture } = await import('./fixtures/servers/http-server.mjs');
+    const fixture = await startHttpFixture('oauth-iss');
+    const transport = new HttpTransport(fixture.url);
+    try {
+      await runChecks(transport, { timeoutMs: 5000, only: ['MCP019', 'MCP020'] });
+      // The same three requests MCP019 alone makes.
+      expect(fixture.metadataRequests).toHaveLength(3);
+    } finally {
+      await transport.close();
+      await fixture.close();
+    }
+  });
+});
