@@ -6,7 +6,7 @@ into something you cannot drift past without noticing.
 ## The action
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v0.3.0
+- uses: Khanthtutzin/mcp-stateless@v0.3.1
   with:
     stdio: node dist/server.js
     fail-on: error
@@ -37,7 +37,7 @@ jobs:
           node-version: '22'
       - run: npm ci && npm run build
 
-      - uses: Khanthtutzin/mcp-stateless@v0.3.0
+      - uses: Khanthtutzin/mcp-stateless@v0.3.1
         with:
           stdio: node dist/server.js
           fail-on: error
@@ -81,7 +81,7 @@ directly above it. It now probes once and renders many times.
 Use the outputs to react without re-running anything:
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v0.3.0
+- uses: Khanthtutzin/mcp-stateless@v0.3.1
   id: check
   with:
     stdio: node dist/server.js
@@ -100,7 +100,7 @@ SARIF output puts each finding on the exact line of your workflow's run in the
 GitHub code-scanning UI, and inline on pull requests.
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v0.3.0
+- uses: Khanthtutzin/mcp-stateless@v0.3.1
   with:
     stdio: node dist/server.js
     format: sarif

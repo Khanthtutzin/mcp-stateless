@@ -11,6 +11,8 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-09-27
+
 ### Changed
 
 - The npm package's homepage now points at the docs site rather than the
@@ -247,7 +249,8 @@ Initial release. Checks a live MCP server against revision
 - Generated per-rule documentation under `docs/rules/`, with a CI check that
   keeps it in step with the rule sources.
 
-[Unreleased]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/Khanthtutzin/mcp-stateless/releases/tag/v0.1.5

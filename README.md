@@ -237,7 +237,7 @@ envelope, not your logic.
 ## In CI
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v0.3.0
+- uses: Khanthtutzin/mcp-stateless@v0.3.1
   with:
     stdio: node dist/server.js
     fail-on: error
