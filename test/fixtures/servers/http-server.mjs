@@ -4,7 +4,8 @@
  * Started in-process by the test suite rather than spawned, so ports are
  * chosen by the OS and cleanup is deterministic.
  *
- * Modes: legacy | modern | strict-params | strict-headers
+ * Modes: legacy | modern | strict-params | strict-headers | dual-era |
+ *        partial-cache | tools-only
  */
 import { createServer } from 'node:http';
 import { createHandler } from './handlers.mjs';
@@ -23,7 +24,7 @@ function readBody(req) {
 }
 
 /**
- * @param {'legacy'|'modern'|'strict-params'|'strict-headers'} mode
+ * @param {import('./http-server.d.mts').FixtureMode} mode
  * @returns {Promise<{ url: string, close: () => Promise<void> }>}
  */
 export async function startHttpFixture(mode) {

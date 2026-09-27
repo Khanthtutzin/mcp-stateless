@@ -142,3 +142,14 @@ describe('http transport — required standard headers', () => {
     }
   });
 });
+
+describe('http — MCP005 across every CacheableResult method', () => {
+  it('catches a server whose tools/list is compliant but other methods are not', async () => {
+    const report = await checkHttp('partial-cache', { only: ['MCP005'] });
+    expect(report.ready).toBe(false);
+    const ttl = report.findings.find((f) => /ttlMs/.test(f.observed))!;
+    expect(ttl.observed).toContain('prompts/list');
+    expect(ttl.observed).toContain('resources/read');
+    expect(ttl.observed).not.toContain('tools/list');
+  });
+});

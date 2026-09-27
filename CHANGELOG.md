@@ -11,6 +11,24 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+### Changed
+
+- **MCP005 now checks all five `CacheableResult` methods**, not only
+  `tools/list`: `prompts/list`, `resources/list`, `resources/templates/list`
+  and `resources/read` (on the first URI the server lists). A server whose
+  `tools/list` was compliant could previously pass while breaking caching on
+  the other four. Methods a server does not implement are skipped. Findings
+  stay one per missing field, with every affected method named in `observed`
+  and included as evidence, so MCP005 still contributes at most two errors.
+  A server may newly fail it on upgrade. (#5)
+
+### Fixed
+
+- Rule pages for MCP002, MCP012 and MCP015 showed TypeScript source under
+  "Why this changed". The docs generator matched from the file's first `/**`
+  rather than the comment directly above the rule, so any helper with its own
+  doc comment was swept in.
+
 ## [0.2.0] — 2026-09-27
 
 ### Added

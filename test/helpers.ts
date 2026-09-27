@@ -9,7 +9,13 @@ const STDIO_SERVER = fileURLToPath(
 );
 
 export type FixtureMode =
-  'legacy' | 'modern' | 'strict-params' | 'strict-headers' | 'dual-era';
+  | 'legacy'
+  | 'modern'
+  | 'strict-params'
+  | 'strict-headers'
+  | 'dual-era'
+  | 'partial-cache'
+  | 'tools-only';
 
 /**
  * Run the checker against a fixture server over real stdio.

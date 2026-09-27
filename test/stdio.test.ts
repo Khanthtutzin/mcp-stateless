@@ -79,6 +79,55 @@ describe('stdio — server that rejects the _meta envelope', () => {
   });
 });
 
+describe('MCP005 — every CacheableResult method, not just tools/list', () => {
+  const ALL_FIVE = [
+    'tools/list',
+    'prompts/list',
+    'resources/list',
+    'resources/templates/list',
+    'resources/read',
+  ];
+
+  it('names all five methods on a legacy server, one finding per field', async () => {
+    const report = await checkStdio('legacy', { only: ['MCP005'] });
+    expect(report.findings).toHaveLength(2);
+
+    for (const f of report.findings) {
+      for (const method of ALL_FIVE) expect(f.observed).toContain(method);
+      expect(f.evidence.map((ex) => ex.request.method).sort()).toEqual(
+        [...ALL_FIVE].sort(),
+      );
+    }
+  });
+
+  it('reads a resource the server listed, not a guessed URI', async () => {
+    const report = await checkStdio('legacy', { only: ['MCP005'] });
+    const read = report.findings[0]!.evidence.find(
+      (ex) => ex.request.method === 'resources/read',
+    )!;
+    expect(read.request.params).toMatchObject({ uri: 'fixture://notes/readme' });
+  });
+
+  it('catches a server whose tools/list is compliant but other methods are not', async () => {
+    // Before this rule covered all five methods, this server passed.
+    const report = await checkStdio('partial-cache', { only: ['MCP005'] });
+    expect(report.ready).toBe(false);
+    expect(report.findings).toHaveLength(2);
+
+    const ttl = report.findings.find((f) => /ttlMs/.test(f.observed))!;
+    expect(ttl.observed).toContain('prompts/list');
+    expect(ttl.observed).toContain('resources/read');
+    expect(ttl.observed).not.toContain('tools/list');
+    expect(ttl.fix).toContain('prompts/list and resources/read results');
+  });
+
+  it('does not fault a server that implements no prompts or resources', async () => {
+    const report = await checkStdio('tools-only', { only: ['MCP005'] });
+    expect(report.findings).toEqual([]);
+    expect(report.ready).toBe(true);
+  });
+});
+
 describe('rule selection', () => {
   it('honours --only', async () => {
     const report = await checkStdio('legacy', { only: ['MCP006'] });
