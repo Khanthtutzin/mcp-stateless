@@ -15,6 +15,10 @@ silently start suppressing a different check.
 
 - The npm package's homepage now points at the docs site rather than the
   GitHub README.
+- The Action's display name is now "MCP Stateless Check", so it can be listed
+  on GitHub Marketplace: a GitHub organization already holds the name
+  `mcp-stateless`. Nothing else changes: workflows still reference
+  `Khanthtutzin/mcp-stateless@<version>`.
 
 ## [0.3.0] — 2026-09-27
 
