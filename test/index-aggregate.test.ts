@@ -875,3 +875,42 @@ describe('applySnapshot reports the right file first', () => {
     expect(() => applySnapshot(dead, 'not json at all')).toThrow(/History/);
   });
 });
+
+describe('toolCommit — which code produced a row', () => {
+  // toolVersion comes from package.json, so a scan from main between releases
+  // carries the last release's number while running newer rules.
+  const SHA = '8e0c0588a1b2c3d4e5f60718293a4b5c6d7e8f90';
+
+  it('is carried from the snapshot into the row', () => {
+    const parsed = parseRunSnapshot(rawText([goodResult()], { toolCommit: SHA }));
+    expect(summarise(parsed).toolCommit).toBe(SHA);
+  });
+
+  it('is optional, and absent from the row when absent from the snapshot', () => {
+    const r = summarise(parseRunSnapshot(rawText([goodResult()])));
+    expect('toolCommit' in r).toBe(false);
+  });
+
+  it('rejects anything but a full lowercase commit id', () => {
+    // It comes from the job that runs third-party code and lands in a committed
+    // file, so it gets the same allow-list treatment as everything else.
+    for (const bad of ['8e0c058', SHA.toUpperCase(), `${SHA}0`, '$(rm -rf /)', 42, '']) {
+      expect(() =>
+        parseRunSnapshot(rawText([goodResult()], { toolCommit: bad })),
+      ).toThrow(/toolCommit/);
+    }
+  });
+
+  it('keeps rows written before the field existed valid', () => {
+    const text = JSON.stringify({ schemaVersion: 1, rows: [row('2026-08-31')] });
+    expect(parseHistory(text).rows).toHaveLength(1);
+  });
+
+  it('validates the field on rows that have it', () => {
+    const good = { schemaVersion: 1, rows: [row('2026-09-27', { toolCommit: SHA })] };
+    expect(parseHistory(JSON.stringify(good)).rows[0]!.toolCommit).toBe(SHA);
+
+    const bad = { schemaVersion: 1, rows: [row('2026-09-27', { toolCommit: 'main' })] };
+    expect(() => parseHistory(JSON.stringify(bad))).toThrow(/toolCommit/);
+  });
+});

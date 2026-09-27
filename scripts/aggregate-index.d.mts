@@ -33,6 +33,8 @@ export interface RunSnapshot {
   schemaVersion: 1;
   scannedAt: string;
   toolVersion: string;
+  /** The commit that produced it. Absent from rows written before the field existed. */
+  toolCommit?: string;
   rulesetSize: number;
   results: TargetResult[];
 }
@@ -40,6 +42,8 @@ export interface RunSnapshot {
 export interface HistoryRow {
   date: string;
   toolVersion: string;
+  /** The commit that produced it. Absent from rows written before the field existed. */
+  toolCommit?: string;
   rulesetSize: number;
   cohortSize: number;
   measured: number;
