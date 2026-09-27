@@ -1,4 +1,4 @@
-name: 'mcp-stateless'
+name: 'MCP Stateless Check'
 description: 'Check whether an MCP server is ready for the 2026-07-28 stateless specification.'
 author: 'mcp-stateless contributors'
 
