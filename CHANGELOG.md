@@ -11,6 +11,11 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+### Changed
+
+- The npm package's homepage now points at the docs site rather than the
+  GitHub README.
+
 ## [0.3.0] — 2026-09-27
 
 ### Added
