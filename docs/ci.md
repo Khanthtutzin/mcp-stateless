@@ -5,6 +5,9 @@ into something you cannot drift past without noticing.
 
 ## The action
 
+Listed on GitHub Marketplace as
+[MCP Stateless Check](https://github.com/marketplace/actions/mcp-stateless-check).
+
 ```yaml
 - uses: Khanthtutzin/mcp-stateless@v0.3.1
   with:

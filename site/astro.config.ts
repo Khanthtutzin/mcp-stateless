@@ -29,7 +29,7 @@ export default defineConfig({
 
   integrations: [
     starlight({
-      title: 'mcp-stateless',
+      title: 'MCP Stateless Check',
       description:
         'Check whether an MCP server is ready for the 2026-07-28 stateless specification.',
       customCss: ['./src/styles/theme.css'],
@@ -79,5 +79,4 @@ export default defineConfig({
     }),
     react(),
   ],
-
 });
