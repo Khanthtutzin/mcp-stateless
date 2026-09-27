@@ -83,8 +83,9 @@ had encoded the same assumptions as the rules. `0.1.4` moved publishing to npm
 **trusted publishing** (OIDC), so every version from there carries signed
 provenance and no release token exists to leak. `0.2.0` (2026-09-27) added
 the weekly compliance index, `--emit`, and the `INCOMPLETE` verdict, so a run
-that could not finish is never reported as ready. See the
-[CHANGELOG](../CHANGELOG.md).
+that could not finish is never reported as ready. `0.3.0` (the same day)
+added the two OAuth metadata rules, MCP019 and MCP020, and extended MCP005 to
+every cacheable method. See the [CHANGELOG](../CHANGELOG.md).
 
 ---
 
