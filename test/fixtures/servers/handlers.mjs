@@ -13,6 +13,11 @@
  *   partial-cache  modern, but prompts/list and resources/read lack the
  *                  SEP-2549 cache fields that tools/list carries
  *   tools-only     modern, with no prompts or resources at all
+ *   core-tasks     modern, but still declares tasks in core capabilities
+ *                  rather than the io.modelcontextprotocol/tasks extension
+ *   core-and-ext   modern, declaring both: the extension and a stale core key
+ *   tasks-ext      modern, advertising the tasks extension
+ *   hidden-tasks   modern, serving tasks/get while advertising no tasks at all
  */
 
 const TOOLS = [
@@ -31,6 +36,35 @@ const RESOURCE = {
 const TEMPLATES = [
   { uriTemplate: 'fixture://notes/{name}', name: 'note', mimeType: 'text/plain' },
 ];
+
+/** The 2025-11-25 core tasks capability, removed from core in 2026-07-28. */
+const CORE_TASKS_CAPABILITY = { list: {}, cancel: {}, requests: { tools: { call: {} } } };
+const TASKS_EXTENSION = 'io.modelcontextprotocol/tasks';
+
+/** Modes that serve some task method at all. */
+const SERVES_TASKS = new Set([
+  'legacy',
+  'core-tasks',
+  'core-and-ext',
+  'tasks-ext',
+  'hidden-tasks',
+]);
+
+/** What server/discover advertises, which is where the tasks modes differ. */
+function discoverCapabilities(mode) {
+  const base = { tools: {}, prompts: {}, resources: {} };
+  const extension = { extensions: { [TASKS_EXTENSION]: {} } };
+  switch (mode) {
+    case 'core-tasks':
+      return { ...base, tasks: CORE_TASKS_CAPABILITY };
+    case 'core-and-ext':
+      return { ...base, tasks: CORE_TASKS_CAPABILITY, ...extension };
+    case 'tasks-ext':
+      return { ...base, ...extension };
+    default:
+      return base;
+  }
+}
 
 const SERVER_INFO = { name: 'mcp-stateless-fixture', version: '1.0.0' };
 const META_PROTOCOL_VERSION = 'io.modelcontextprotocol/protocolVersion';
@@ -98,6 +132,7 @@ export function createHandler(mode) {
             tools: { listChanged: true },
             resources: { subscribe: true },
             logging: {},
+            tasks: CORE_TASKS_CAPABILITY,
           },
           serverInfo: SERVER_INFO,
         });
@@ -151,7 +186,7 @@ export function createHandler(mode) {
         return ok(id, {
           resultType: 'complete',
           supportedVersions: ['2026-07-28'],
-          capabilities: { tools: {}, prompts: {}, resources: {} },
+          capabilities: discoverCapabilities(mode),
           ttlMs: 3_600_000,
           cacheScope: 'public',
           _meta: { [META_SERVER_INFO]: SERVER_INFO },
@@ -194,6 +229,24 @@ export function createHandler(mode) {
           ? fail(id, -32002, 'Resource not found')
           : fail(id, -32602, 'Resource not found');
       }
+
+      // Tasks. 2026-07-28 removed tasks/list and the blocking tasks/result
+      // with the move to the extension; tasks/get survives in it. Only the
+      // legacy fixture still serves the removed pair.
+      case 'tasks/list':
+        return mode === 'legacy'
+          ? ok(id, { tasks: [] })
+          : fail(id, -32601, `Method not found: ${method}`);
+
+      case 'tasks/result':
+        return mode === 'legacy'
+          ? fail(id, -32602, 'Task not found')
+          : fail(id, -32601, `Method not found: ${method}`);
+
+      case 'tasks/get':
+        return SERVES_TASKS.has(mode)
+          ? fail(id, -32602, 'Task not found')
+          : fail(id, -32601, `Method not found: ${method}`);
 
       case 'ping':
         return mode === 'legacy'

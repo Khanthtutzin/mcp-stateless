@@ -42,7 +42,7 @@ whole thing, not just the file they are editing.
    are protocol plumbing the SDK owns — they disappear on upgrade. Splitting the
    report on that line turns "10 failures" into "1 thing to do".
 3. **It refuses to guess.** A server it cannot reach produces zero findings, not
-   twenty. Where the spec permits two behaviours, it reports neither. Being
+   twenty-one. Where the spec permits two behaviours, it reports neither. Being
    confidently wrong is the one failure mode that would kill adoption.
 
 ### A five-minute demo
@@ -240,7 +240,7 @@ src/
     types.ts          Rule, Finding, severity, remediation, finding()
     index.ts          the registry (ALL_RULES)
     helpers.ts        shared checks, e.g. "this method was removed, is it gone?"
-    MCP001.ts … MCP018.ts   one file per rule
+    MCP001.ts … MCP021.ts   one file per rule
   report/
     terminal.ts  json.ts  sarif.ts  markdown.ts
 
@@ -331,7 +331,7 @@ exact traffic behind a verdict instead of asking you to trust one.
 
 Before any rule runs, [probe/context.ts](../src/probe/context.ts) performs a
 **fixed opening sequence** once and shares the result. Two reasons: rules stay
-cheap and ordering-free, and the server is not subjected to twenty
+cheap and ordering-free, and the server is not subjected to twenty-one
 near-identical handshake attempts.
 
 ```mermaid
@@ -359,7 +359,7 @@ this specific sequence separates them.
 
 `runChecks` then asks one question before judging anything: did _every single_
 probe come back as a `transportError`? If so the report is `UNREACHABLE`, with
-**zero findings** — because twenty confident verdicts about a server that
+**zero findings** — because twenty-one confident verdicts about a server that
 failed to start would be worse than no output at all. That case exits `2`
 (operational failure), not `1` (findings).
 
@@ -815,8 +815,8 @@ its own lockfile for exactly this reason.
 - **A new transport.** Implement `Transport`, add its kind to `TransportKind`,
   and tag rules via `appliesTo`. No rule body should need to change.
 - **The deliberately uncovered checks.** Multi Round-Trip Request conformance
-  and the tasks-extension migration both need an interactive scenario to probe
-  honestly. They are tracked as issues rather than checked unreliably — see
+  needs an interactive scenario to probe honestly. It is tracked as an issue
+  rather than checked unreliably — see
   [the catalogue](rules/README.md#not-yet-covered). That restraint is the same
   instinct as invariant 5.
 

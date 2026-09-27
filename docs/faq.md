@@ -38,7 +38,7 @@ do not maintain.
 
 So every rule declares who fixes it, and the summary splits on that line. Seven
 findings can mean zero work for you and one dependency bump. Five of the
-twenty rules — MCP013, MCP015, MCP017, MCP019 and MCP020 — land on your own code or
+twenty-one rules — MCP013, MCP015, MCP017, MCP019 and MCP020 — land on your own code or
 configuration; the rest are SDK plumbing.
 
 ## It says UNREACHABLE and reported nothing
@@ -54,14 +54,13 @@ for a slow start.
 
 ## What is not covered?
 
-Two changes need an interactive scenario to probe honestly, and checking them
-unreliably would be worse than not checking them. They are tracked as issues
-rather than implemented as unreliable rules:
+One change needs an interactive scenario to probe honestly, and checking it
+unreliably would be worse than not checking it. It is tracked as an issue
+rather than implemented as an unreliable rule:
 
 - Multi Round-Trip Request conformance (SEP-2322)
-- Tasks extension migration (SEP-2663)
 
-See [the rule catalogue](rules/README.md) for the twenty that are covered.
+See [the rule catalogue](rules/README.md) for the twenty-one that are covered.
 
 ## How is this different from the official codemod?
 

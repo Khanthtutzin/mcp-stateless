@@ -106,7 +106,7 @@ NOT READY — 7 breaking issues across 14 checks.
 
 Seven failures, zero work: bump one dependency. Without that split, the same run
 reads as a week of unfamiliar protocol work, and the honest answer is that
-**fifteen of the twenty rules are things an SDK upgrade fixes**. Only five —
+**sixteen of the twenty-one rules are things an SDK upgrade fixes**. Only five —
 `MCP013`, `MCP015`, `MCP017`, `MCP019`, `MCP020` — land on code or configuration the
 author actually controls.
 
@@ -122,7 +122,7 @@ any of that.
 `remediation: 'sdk' | 'application'`, and every report splits on that line.
 
 **It refuses to guess.** A server it cannot reach produces **zero** findings, not
-twenty — nothing was measured, so nothing failed. Where the spec permits two
+twenty-one — nothing was measured, so nothing failed. Where the spec permits two
 behaviours, it reports neither. Being confidently wrong is the one failure mode
 that would make the tool not worth running, so silence is preferred to a guess.
 
@@ -136,9 +136,9 @@ that would make the tool not worth running, so silence is preferred to a guess.
   authorization servers its own metadata names, for their public discovery
   documents. Your `--header` values never go to those. There is no telemetry,
   and no service to receive it.
-- **It does not check two things it cannot check honestly** — Multi Round-Trip
-  Requests and the tasks extension both need an interactive scenario. They are tracked as issues rather than
-  shipped as unreliable rules.
+- **It does not check what it cannot check honestly** — Multi Round-Trip
+  Requests need an interactive scenario, so they are tracked as an issue rather
+  than shipped as an unreliable rule.
 
 ---
 
@@ -190,7 +190,7 @@ sequence tells them apart.
 
 ### Rules
 
-Each of the 20 checks is one file that receives a `ProbeContext` and returns
+Each of the 21 checks is one file that receives a `ProbeContext` and returns
 findings. Rules never construct transports, never touch sockets, and never
 depend on each other, which is what makes adding one a self-contained change:
 one file, one registry line, one test. A rule that throws is recorded as

@@ -176,11 +176,11 @@ what it still cannot tell you.
 
 ## What it checks
 
-**20 rules**, each tied to a named changelog entry and SEP. Full detail in
+**21 rules**, each tied to a named changelog entry and SEP. Full detail in
 [`docs/rules/`](docs/rules/README.md).
 
 <details>
-<summary><b>Breaking — 14 rules</b></summary>
+<summary><b>Breaking — 15 rules</b></summary>
 
 <br>
 
@@ -200,6 +200,7 @@ what it still cannot tell you.
 | [MCP012](docs/rules/MCP012.md) | Protocol error codes not renumbered                    | stdio, http | SDK upgrade |
 | [MCP013](docs/rules/MCP013.md) | Rejects requests carrying the `_meta` envelope         | stdio, http | your code   |
 | [MCP014](docs/rules/MCP014.md) | Rejects the required `Mcp-Method` / `Mcp-Name` headers | http        | SDK upgrade |
+| [MCP021](docs/rules/MCP021.md) | Tasks served from core, not the tasks extension        | stdio, http | SDK upgrade |
 
 </details>
 
@@ -224,12 +225,11 @@ what it still cannot tell you.
 
 <br>
 
-Some changes need an interactive scenario to probe honestly.
-Checking them unreliably would be worse than not checking them, so they are
-tracked as issues instead:
+One change needs an interactive scenario to probe honestly. Checking it
+unreliably would be worse than not checking it, so it is tracked as an issue
+instead:
 
 - [#1](https://github.com/Khanthtutzin/mcp-stateless/issues/1) Multi Round-Trip Request conformance — SEP-2322
-- [#2](https://github.com/Khanthtutzin/mcp-stateless/issues/2) Tasks extension migration — SEP-2663
 
 It also never calls a tool — tools have side effects. It checks the protocol
 envelope, not your logic.
@@ -288,7 +288,7 @@ requests:
 ```
 
 A server that never answers is reported `UNREACHABLE` with **no findings at
-all** — twenty confident verdicts about a server that failed to start would be
+all** — twenty-one confident verdicts about a server that failed to start would be
 worse than nothing.
 
 </details>

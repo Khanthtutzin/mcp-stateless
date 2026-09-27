@@ -11,7 +11,7 @@ What the revision changed, and which checks cover each part of it.
 | --- | --- | --- |
 | **Discovery** | How a client learns what a server can do, now that no handshake tells it. | [MCP001](MCP001.md) |
 | **Statelessness** | The handshake and per-connection sessions are gone; every request stands alone. | [MCP002](MCP002.md) · [MCP003](MCP003.md) |
-| **Removed methods** | Methods deleted in this revision, and the one that replaced subscriptions. | [MCP006](MCP006.md) · [MCP007](MCP007.md) · [MCP008](MCP008.md) · [MCP009](MCP009.md) · [MCP010](MCP010.md) |
+| **Removed methods** | Methods deleted in this revision, and the one that replaced subscriptions. | [MCP006](MCP006.md) · [MCP007](MCP007.md) · [MCP008](MCP008.md) · [MCP009](MCP009.md) · [MCP010](MCP010.md) · [MCP021](MCP021.md) |
 | **Result shape** | Fields every result must now carry, including who produced it. | [MCP004](MCP004.md) · [MCP005](MCP005.md) · [MCP018](MCP018.md) |
 | **Error codes** | Codes that moved into the reserved range, or changed meaning. | [MCP011](MCP011.md) · [MCP012](MCP012.md) |
 | **Request envelope** | The per-request `_meta` block and the headers that accompany it. | [MCP013](MCP013.md) · [MCP014](MCP014.md) |
@@ -21,14 +21,14 @@ What the revision changed, and which checks cover each part of it.
 ## Who has to fix it
 
 Every rule declares an owner, and it is the most useful column in the table
-below. 15 of the 20 rules are
+below. 16 of the 21 rules are
 protocol plumbing your MCP SDK owns: upgrading to a release that targets
 2026-07-28 resolves them with no change to your own code. Only
 [MCP013](MCP013.md), [MCP015](MCP015.md), [MCP017](MCP017.md), [MCP019](MCP019.md), [MCP020](MCP020.md) can ever be
 something you wrote.
 
 So the order to work in is fixed: upgrade the SDK, re-run the check, and then
-look at what is left — rather than reading a list of twenty findings, most of
+look at what is left — rather than reading a list of twenty-one findings, most of
 which describe code you did not write.
 
 ## Breaking
@@ -51,6 +51,7 @@ A server failing any of these will not work with 2026-07-28 clients.
 | [MCP012](MCP012.md) | `error` | Protocol error codes were not renumbered into the reserved range | SDK upgrade | stdio, http |
 | [MCP013](MCP013.md) | `error` | Server rejects requests carrying the _meta protocol envelope | your code | stdio, http |
 | [MCP014](MCP014.md) | `error` | Server rejects the required Mcp-Method and Mcp-Name headers | SDK upgrade | http |
+| [MCP021](MCP021.md) | `error` | Tasks are still served from the core protocol, not the tasks extension | SDK upgrade | stdio, http |
 
 ## Deprecations and advisories
 
@@ -67,12 +68,12 @@ These still work today, but are scheduled for removal or degrade behaviour.
 
 ## Not yet covered
 
-Some 2026-07-28 changes need an interactive scenario to probe properly, and are deliberately left out rather than checked unreliably:
+One 2026-07-28 change needs an interactive scenario to probe properly, and is
+deliberately left out rather than checked unreliably:
 
 - Multi Round-Trip Requests (`InputRequiredResult`) conformance — SEP-2322
-- Migration of tasks to the `io.modelcontextprotocol/tasks` extension — SEP-2663
 
-Each has a tracking issue. Contributions welcome — see
+It has a tracking issue. Contributions welcome — see
 [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ---

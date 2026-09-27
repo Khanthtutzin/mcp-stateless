@@ -2,7 +2,7 @@
 /**
  * Fixture MCP server on stdio.
  *
- * Usage: node stdio-server.mjs <legacy|modern|strict-params|dual-era|partial-cache|tools-only>
+ * Usage: node stdio-server.mjs <legacy|modern|strict-params|dual-era|partial-cache|tools-only|core-tasks|core-and-ext|tasks-ext|hidden-tasks>
  */
 import { createHandler } from './handlers.mjs';
 
@@ -14,6 +14,10 @@ const MODES = [
   'dual-era',
   'partial-cache',
   'tools-only',
+  'core-tasks',
+  'core-and-ext',
+  'tasks-ext',
+  'hidden-tasks',
 ];
 if (!MODES.includes(mode)) {
   process.stderr.write(`Unknown mode: ${mode}\n`);
