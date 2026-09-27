@@ -3,6 +3,7 @@ import type {
   Exchange,
   JsonRpcRequest,
   JsonRpcResponse,
+  MetadataFetch,
   RawHttpResult,
   SendOptions,
   Transport,
@@ -242,6 +243,45 @@ export class HttpTransport implements Transport {
     }
   }
 
+  async fetchMetadata(url: string): Promise<MetadataFetch> {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return { url, status: 0, error: 'not a valid URL' };
+    }
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return { url, status: 0, error: `refusing to fetch a ${parsed.protocol} URL` };
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+    try {
+      // Deliberately not this.extraHeaders — see Transport.fetchMetadata.
+      const res = await fetch(parsed, {
+        headers: { accept: 'application/json' },
+        signal: controller.signal,
+      });
+      const text = await readBoundedText(res, METADATA_LIMIT_BYTES);
+      if (text === null) {
+        return { url, status: res.status, error: 'metadata document too large' };
+      }
+      try {
+        return { url, status: res.status, json: JSON.parse(text) };
+      } catch {
+        return { url, status: res.status };
+      }
+    } catch (err) {
+      return {
+        url,
+        status: 0,
+        error: (err as Error).name === 'AbortError' ? 'timeout' : (err as Error).message,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   diagnostics(): string[] {
     return [...this.notes];
   }
@@ -265,6 +305,34 @@ function protocolVersionOf(request: JsonRpcRequest): string | undefined {
 
 function lowercaseKeys(obj: Record<string, string>): Record<string, string> {
   return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k.toLowerCase(), v]));
+}
+
+/** Real discovery documents are a few KB; anything this big is not one. */
+const METADATA_LIMIT_BYTES = 256 * 1024;
+
+/**
+ * Read a whole body as text, or `null` if it exceeds `limit` bytes. Unlike
+ * the preview below, this waits for the end: a metadata document is a
+ * complete JSON value or it is useless.
+ */
+async function readBoundedText(res: Response, limit: number): Promise<string | null> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  let size = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > limit) return null;
+      text += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  return text + decoder.decode();
 }
 
 /**

@@ -55,6 +55,13 @@ function extract(source, file) {
   };
 }
 
+/** An example target the rule actually runs against: an HTTP-only rule never runs over stdio. */
+function exampleTarget(rule) {
+  return rule.appliesTo.includes('stdio')
+    ? '--stdio "node dist/server.js"'
+    : '--http https://mcp.example.com/mcp';
+}
+
 function page(rule) {
   return `# ${rule.id} — ${rule.title}
 
@@ -77,7 +84,7 @@ ${rule.rationale}
 ## Running just this check
 
 \`\`\`bash
-npx mcp-stateless --stdio "node dist/server.js" --only ${rule.id}
+npx mcp-stateless ${exampleTarget(rule)} --only ${rule.id}
 \`\`\`
 
 ## Suppressing it
@@ -85,7 +92,7 @@ npx mcp-stateless --stdio "node dist/server.js" --only ${rule.id}
 If this check does not apply to your server, skip it:
 
 \`\`\`bash
-npx mcp-stateless --stdio "node dist/server.js" --skip ${rule.id}
+npx mcp-stateless ${exampleTarget(rule)} --skip ${rule.id}
 \`\`\`
 
 Rule ids are permanent and are never reissued, so a suppression cannot start
@@ -146,6 +153,11 @@ const AREAS = [
     name: 'Deprecations',
     plain: 'Still works today, scheduled for removal or degrading behaviour.',
     ids: ['MCP015', 'MCP016', 'MCP017'],
+  },
+  {
+    name: 'Authorization',
+    plain: 'What an OAuth-protected server publishes so a client can trust its tokens.',
+    ids: ['MCP019'],
   },
 ];
 
@@ -208,7 +220,7 @@ ${application.map((r) => `[${r.id}](${r.id}.md)`).join(', ')} can ever be
 something you wrote.
 
 So the order to work in is fixed: upgrade the SDK, re-run the check, and then
-look at what is left — rather than reading a list of eighteen findings, most of
+look at what is left — rather than reading a list of nineteen findings, most of
 which describe code you did not write.
 
 ## Breaking
@@ -234,7 +246,6 @@ properly, and are deliberately left out rather than checked unreliably:
 
 - Multi Round-Trip Requests (\`InputRequiredResult\`) conformance — SEP-2322
 - Migration of tasks to the \`io.modelcontextprotocol/tasks\` extension — SEP-2663
-- RFC 9207 \`iss\` validation in authorization responses — SEP-2468
 - Client ID Metadata Documents replacing Dynamic Client Registration
 
 Each has a tracking issue. Contributions welcome — see

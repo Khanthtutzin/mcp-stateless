@@ -5,7 +5,7 @@ in the order you will actually do it.
 
 This is the connective guide. It does not repeat the reference material:
 [Usage](usage.md) lists every flag, [In CI](ci.md) covers the GitHub Action,
-[Rules](rules/README.md) documents all eighteen checks, and
+[Rules](rules/README.md) documents all nineteen checks, and
 [Migrating a real server](migration-walkthrough.md) works one migration through
 end to end. Start here if you want to know what to do next; go there for detail.
 
@@ -144,8 +144,8 @@ Every finding is marked as one of two kinds:
 - unmarked — a choice you made: capabilities you declared, schemas you wrote,
   features you opted into.
 
-Only three of the eighteen rules can ever land in the second group — `MCP013`,
-`MCP015` and `MCP017`. Everything else is the SDK's.
+Only four of the nineteen rules can ever land in the second group — `MCP013`,
+`MCP015`, `MCP017` and `MCP019`. Everything else is the SDK's.
 
 **So the triage order is fixed:**
 
@@ -153,7 +153,7 @@ Only three of the eighteen rules can ever land in the second group — `MCP013`,
 2. Re-run the check.
 3. Work on whatever is left — that part is genuinely yours.
 
-Doing it the other way round means reading eighteen findings, most of which
+Doing it the other way round means reading nineteen findings, most of which
 describe code you did not write and cannot change from where you are sitting.
 The summary tells you the split before you scroll:
 

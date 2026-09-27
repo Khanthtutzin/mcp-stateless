@@ -37,9 +37,9 @@ delete a `ping` handler you never wrote would send you hunting through code you
 do not maintain.
 
 So every rule declares who fixes it, and the summary splits on that line. Seven
-findings can mean zero work for you and one dependency bump. Three of the
-eighteen rules — MCP013, MCP015 and MCP017 — land on your own code; the rest
-are SDK plumbing.
+findings can mean zero work for you and one dependency bump. Four of the
+nineteen rules — MCP013, MCP015, MCP017 and MCP019 — land on your own code or
+configuration; the rest are SDK plumbing.
 
 ## It says UNREACHABLE and reported nothing
 
@@ -54,16 +54,15 @@ for a slow start.
 
 ## What is not covered?
 
-Four changes need an authentication flow or an interactive scenario to probe
+Three changes need an authentication flow or an interactive scenario to probe
 honestly, and checking them unreliably would be worse than not checking them.
 They are tracked as issues rather than implemented as unreliable rules:
 
 - Multi Round-Trip Request conformance (SEP-2322)
 - Tasks extension migration (SEP-2663)
-- RFC 9207 `iss` validation (SEP-2468)
 - Client ID Metadata Documents
 
-See [the rule catalogue](rules/README.md) for the eighteen that are covered.
+See [the rule catalogue](rules/README.md) for the nineteen that are covered.
 
 ## How is this different from the official codemod?
 
