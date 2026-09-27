@@ -106,8 +106,9 @@ NOT READY — 7 breaking issues across 14 checks.
 
 Seven failures, zero work: bump one dependency. Without that split, the same run
 reads as a week of unfamiliar protocol work, and the honest answer is that
-**fifteen of the eighteen rules are things an SDK upgrade fixes**. Only three —
-`MCP013`, `MCP015`, `MCP017` — land on code the author actually wrote.
+**fifteen of the nineteen rules are things an SDK upgrade fixes**. Only four —
+`MCP013`, `MCP015`, `MCP017`, `MCP019` — land on code or configuration the
+author actually controls.
 
 ### The three principles behind every design decision
 
@@ -121,7 +122,7 @@ any of that.
 `remediation: 'sdk' | 'application'`, and every report splits on that line.
 
 **It refuses to guess.** A server it cannot reach produces **zero** findings, not
-eighteen — nothing was measured, so nothing failed. Where the spec permits two
+nineteen — nothing was measured, so nothing failed. Where the spec permits two
 behaviours, it reports neither. Being confidently wrong is the one failure mode
 that would make the tool not worth running, so silence is preferred to a guess.
 
@@ -131,11 +132,14 @@ that would make the tool not worth running, so silence is preferred to a guess.
   would be unsafe to point at anything real. It exercises the protocol envelope,
   not your logic.
 - **It never sends anything anywhere.** The only network traffic is to the server
-  you named. There is no telemetry, and no service to receive it.
-- **It does not check four things it cannot check honestly** — Multi Round-Trip
-  Requests, the tasks extension, RFC 9207 `iss` validation, and Client ID
-  Metadata Documents all need an auth flow or an interactive scenario. They are
-  tracked as issues rather than shipped as unreliable rules.
+  you named — and, when that server publishes OAuth metadata, to the
+  authorization servers its own metadata names, for their public discovery
+  documents. Your `--header` values never go to those. There is no telemetry,
+  and no service to receive it.
+- **It does not check three things it cannot check honestly** — Multi Round-Trip
+  Requests, the tasks extension, and Client ID Metadata Documents all need an
+  auth flow or an interactive scenario. They are tracked as issues rather than
+  shipped as unreliable rules.
 
 ---
 
@@ -187,7 +191,7 @@ sequence tells them apart.
 
 ### Rules
 
-Each of the 18 checks is one file that receives a `ProbeContext` and returns
+Each of the 19 checks is one file that receives a `ProbeContext` and returns
 findings. Rules never construct transports, never touch sockets, and never
 depend on each other, which is what makes adding one a self-contained change:
 one file, one registry line, one test. A rule that throws is recorded as

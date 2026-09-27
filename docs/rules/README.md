@@ -16,18 +16,19 @@ What the revision changed, and which checks cover each part of it.
 | **Error codes** | Codes that moved into the reserved range, or changed meaning. | [MCP011](MCP011.md) · [MCP012](MCP012.md) |
 | **Request envelope** | The per-request `_meta` block and the headers that accompany it. | [MCP013](MCP013.md) · [MCP014](MCP014.md) |
 | **Deprecations** | Still works today, scheduled for removal or degrading behaviour. | [MCP015](MCP015.md) · [MCP016](MCP016.md) · [MCP017](MCP017.md) |
+| **Authorization** | What an OAuth-protected server publishes so a client can trust its tokens. | [MCP019](MCP019.md) |
 
 ## Who has to fix it
 
 Every rule declares an owner, and it is the most useful column in the table
-below. 15 of the 18 rules are
+below. 15 of the 19 rules are
 protocol plumbing your MCP SDK owns: upgrading to a release that targets
 2026-07-28 resolves them with no change to your own code. Only
-[MCP013](MCP013.md), [MCP015](MCP015.md), [MCP017](MCP017.md) can ever be
+[MCP013](MCP013.md), [MCP015](MCP015.md), [MCP017](MCP017.md), [MCP019](MCP019.md) can ever be
 something you wrote.
 
 So the order to work in is fixed: upgrade the SDK, re-run the check, and then
-look at what is left — rather than reading a list of eighteen findings, most of
+look at what is left — rather than reading a list of nineteen findings, most of
 which describe code you did not write.
 
 ## Breaking
@@ -61,6 +62,7 @@ These still work today, but are scheduled for removal or degrade behaviour.
 | [MCP016](MCP016.md) | `warning` | Deprecated HTTP+SSE transport detected | SDK upgrade | http |
 | [MCP017](MCP017.md) | `warning` | tools/list ordering is not deterministic | your code | stdio, http |
 | [MCP018](MCP018.md) | `warning` | Results do not identify the server via _meta serverInfo | SDK upgrade | stdio, http |
+| [MCP019](MCP019.md) | `warning` | Authorization server does not advertise RFC 9207 iss support | your code | http |
 
 ## Not yet covered
 
@@ -69,7 +71,6 @@ properly, and are deliberately left out rather than checked unreliably:
 
 - Multi Round-Trip Requests (`InputRequiredResult`) conformance — SEP-2322
 - Migration of tasks to the `io.modelcontextprotocol/tasks` extension — SEP-2663
-- RFC 9207 `iss` validation in authorization responses — SEP-2468
 - Client ID Metadata Documents replacing Dynamic Client Registration
 
 Each has a tracking issue. Contributions welcome — see

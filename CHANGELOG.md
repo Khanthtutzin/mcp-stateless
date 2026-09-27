@@ -11,6 +11,19 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+### Added
+
+- **MCP019** (warning, HTTP): the authorization server does not advertise
+  RFC 9207 `iss` support (SEP-2468). For a server that publishes OAuth
+  Protected Resource Metadata, it follows the spec's discovery order — the
+  401 challenge's `resource_metadata`, then the path-inserted and root
+  well-known URIs, then RFC 8414 and both OpenID Connect Discovery forms for
+  each listed authorization server — and warns when
+  `authorization_response_iss_parameter_supported` is absent or not `true`.
+  Metadata inspection only: no authorization flow, and your `--header` values
+  are never sent to the hosts the metadata names. A server without OAuth
+  metadata is not affected. (#3)
+
 ### Changed
 
 - **MCP005 now checks all five `CacheableResult` methods**, not only

@@ -69,6 +69,16 @@ export interface RawHttpResult {
   error?: string;
 }
 
+/** A GET for a public JSON metadata document, such as OAuth discovery. */
+export interface MetadataFetch {
+  url: string;
+  /** HTTP status, or 0 when no response arrived. */
+  status: number;
+  /** The parsed body, when it was JSON. */
+  json?: unknown;
+  error?: string;
+}
+
 export interface Transport {
   readonly kind: 'stdio' | 'http';
   /** Human-readable description of the target, for report headers. */
@@ -81,6 +91,15 @@ export interface Transport {
    * HTTP transport; stdio returns `null`.
    */
   rawRequest?(method: string, headers?: Record<string, string>): Promise<RawHttpResult>;
+
+  /**
+   * GET a public JSON document at an absolute http(s) URL, which may be on
+   * another origin. Never sends the user's extra headers: those usually carry
+   * a bearer token, and discovery metadata is public by definition, so
+   * forwarding them would hand a credential to whatever host the server's
+   * metadata names. Only meaningful for the HTTP transport.
+   */
+  fetchMetadata?(url: string): Promise<MetadataFetch>;
 
   /** Anything the transport captured out of band (e.g. stderr from a child). */
   diagnostics(): string[];

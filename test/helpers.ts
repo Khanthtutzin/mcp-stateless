@@ -3,19 +3,16 @@ import { runChecks, type RunReport } from '../src/run.js';
 import { StdioTransport } from '../src/transport/stdio.js';
 import { HttpTransport } from '../src/transport/http.js';
 import type { RunOptions } from '../src/run.js';
+import type { FixtureMode } from './fixtures/servers/http-server.mjs';
 
 const STDIO_SERVER = fileURLToPath(
   new URL('./fixtures/servers/stdio-server.mjs', import.meta.url),
 );
 
-export type FixtureMode =
-  | 'legacy'
-  | 'modern'
-  | 'strict-params'
-  | 'strict-headers'
-  | 'dual-era'
-  | 'partial-cache'
-  | 'tools-only';
+export type { FixtureMode };
+
+/** Modes only the HTTP fixture can serve: headers and OAuth metadata. */
+type HttpOnlyMode = 'strict-headers' | `oauth-${string}`;
 
 /**
  * Run the checker against a fixture server over real stdio.
@@ -24,7 +21,7 @@ export type FixtureMode =
  * spaces — which incidentally exercises the command tokenizer on every run.
  */
 export async function checkStdio(
-  mode: Exclude<FixtureMode, 'strict-headers'>,
+  mode: Exclude<FixtureMode, HttpOnlyMode>,
   options: RunOptions = {},
 ): Promise<RunReport> {
   const transport = new StdioTransport(`node "${STDIO_SERVER}" ${mode}`);

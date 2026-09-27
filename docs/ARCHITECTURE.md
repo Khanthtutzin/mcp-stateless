@@ -42,7 +42,7 @@ whole thing, not just the file they are editing.
    are protocol plumbing the SDK owns — they disappear on upgrade. Splitting the
    report on that line turns "10 failures" into "1 thing to do".
 3. **It refuses to guess.** A server it cannot reach produces zero findings, not
-   eighteen. Where the spec permits two behaviours, it reports neither. Being
+   nineteen. Where the spec permits two behaviours, it reports neither. Being
    confidently wrong is the one failure mode that would kill adoption.
 
 ### A five-minute demo
@@ -330,7 +330,7 @@ exact traffic behind a verdict instead of asking you to trust one.
 
 Before any rule runs, [probe/context.ts](../src/probe/context.ts) performs a
 **fixed opening sequence** once and shares the result. Two reasons: rules stay
-cheap and ordering-free, and the server is not subjected to eighteen
+cheap and ordering-free, and the server is not subjected to nineteen
 near-identical handshake attempts.
 
 ```mermaid
@@ -358,7 +358,7 @@ this specific sequence separates them.
 
 `runChecks` then asks one question before judging anything: did _every single_
 probe come back as a `transportError`? If so the report is `UNREACHABLE`, with
-**zero findings** — because eighteen confident verdicts about a server that
+**zero findings** — because nineteen confident verdicts about a server that
 failed to start would be worse than no output at all. That case exits `2`
 (operational failure), not `1` (findings).
 
@@ -505,6 +505,12 @@ on Windows, which CI caught and a local run never would.
 - `rawRequest` issues a **non**-JSON-RPC request (used to detect a leftover GET
   stream endpoint) and reads a bounded 2 KB / 1 s preview — deliberately never
   draining, because a legacy SSE endpoint holds the stream open forever.
+- `fetchMetadata` GETs a public JSON document — OAuth discovery, for MCP019 —
+  at an absolute URL that may be on **another origin**, capped at 256 KB. It
+  never sends the user's `--header` values: those usually carry a bearer
+  token, and the URL comes from metadata the server controls. A test asserts
+  this. Its fetches are not in the transcript, so an unreachable authorization
+  server cannot make the MCP server's run `INCOMPLETE`.
 - `close()` is a no-op. Stateless by construction; there is nothing to tear
   down.
 
@@ -808,9 +814,8 @@ its own lockfile for exactly this reason.
 - **A new transport.** Implement `Transport`, add its kind to `TransportKind`,
   and tag rules via `appliesTo`. No rule body should need to change.
 - **The deliberately uncovered checks.** Multi Round-Trip Request conformance,
-  the tasks-extension migration, RFC 9207 `iss` validation, and Client ID
-  Metadata Documents all need an auth flow or an interactive scenario to probe
-  honestly. They are tracked as issues rather than checked unreliably — see
+  the tasks-extension migration, and Client ID Metadata Documents all need an
+  auth flow or an interactive scenario to probe honestly. They are tracked as issues rather than checked unreliably — see
   [the catalogue](rules/README.md#not-yet-covered). That restraint is the same
   instinct as invariant 5.
 
