@@ -11,6 +11,19 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+### Fixed
+
+- A correctly migrated server that advertises `listChanged` could never be
+  `READY`. A working `subscriptions/listen` is never answered: the server sends
+  `notifications/subscriptions/acknowledged`, tagged with the request id, and
+  holds the stream open. MCP009 waited for a response and timed out, and
+  since 0.2.0 any unanswered probe makes a run `INCOMPLETE`, so the official
+  2.1.0 SDK served through `serveStdio` came back `INCOMPLETE` rather than
+  `READY`. Both transports now treat the acknowledgement as the answer. A
+  server that stays silent is still unanswered. The fixtures had answered
+  `subscriptions/listen` like an ordinary request, which is why no test
+  caught it; they now hold it open the way the SDK does.
+
 ### Added
 
 - **MCP021** (error): tasks still served from the core protocol rather than the

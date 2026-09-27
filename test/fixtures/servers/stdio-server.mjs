@@ -2,7 +2,7 @@
 /**
  * Fixture MCP server on stdio.
  *
- * Usage: node stdio-server.mjs <legacy|modern|strict-params|dual-era|partial-cache|tools-only|core-tasks|core-and-ext|tasks-ext|hidden-tasks>
+ * Usage: node stdio-server.mjs <legacy|modern|strict-params|dual-era|partial-cache|tools-only|core-tasks|core-and-ext|tasks-ext|hidden-tasks|list-changed|silent-listen>
  */
 import { createHandler } from './handlers.mjs';
 
@@ -18,6 +18,8 @@ const MODES = [
   'core-and-ext',
   'tasks-ext',
   'hidden-tasks',
+  'list-changed',
+  'silent-listen',
 ];
 if (!MODES.includes(mode)) {
   process.stderr.write(`Unknown mode: ${mode}\n`);
@@ -51,7 +53,13 @@ process.stdin.on('data', (chunk) => {
     }
 
     const response = handle(request);
-    if (response) process.stdout.write(JSON.stringify(response) + '\n');
+    if (response?.hold) {
+      // Held open: the notifications go out, and the request is never answered.
+      for (const message of response.hold)
+        process.stdout.write(JSON.stringify(message) + '\n');
+    } else if (response) {
+      process.stdout.write(JSON.stringify(response) + '\n');
+    }
   }
 });
 

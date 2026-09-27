@@ -153,3 +153,18 @@ describe('http — MCP005 across every CacheableResult method', () => {
     expect(ttl.observed).not.toContain('tools/list');
   });
 });
+
+describe('http — subscriptions/listen is a held event stream', () => {
+  it('certifies a server that acknowledges the stream and holds it open', async () => {
+    const report = await checkHttp('list-changed');
+    expect(report.incomplete).toBeUndefined();
+    expect(report.findings).toEqual([]);
+    expect(report.ready).toBe(true);
+  });
+
+  it('still calls total silence unanswered', async () => {
+    const report = await checkHttp('silent-listen');
+    expect(report.ready).toBe(false);
+    expect(report.incomplete?.failed).toBe(1);
+  });
+});

@@ -18,6 +18,12 @@
  *   core-and-ext   modern, declaring both: the extension and a stale core key
  *   tasks-ext      modern, advertising the tasks extension
  *   hidden-tasks   modern, serving tasks/get while advertising no tasks at all
+ *   list-changed   modern, advertising tools.listChanged in server/discover
+ *   silent-listen  list-changed, but subscriptions/listen is held open with no
+ *                  acknowledgement at all
+ *
+ * A handler returns a response, null for a notification, or { hold: [...] }:
+ * write those notifications and keep the request open, never answering it.
  */
 
 const TOOLS = [
@@ -61,6 +67,9 @@ function discoverCapabilities(mode) {
       return { ...base, tasks: CORE_TASKS_CAPABILITY, ...extension };
     case 'tasks-ext':
       return { ...base, ...extension };
+    case 'list-changed':
+    case 'silent-listen':
+      return { ...base, tools: { listChanged: true } };
     default:
       return base;
   }
@@ -267,9 +276,26 @@ export function createHandler(mode) {
       case 'subscriptions/listen':
         // The legacy fixture advertises listChanged but has no way to deliver
         // it under the new protocol — precisely what MCP009 looks for.
-        return mode === 'legacy'
-          ? fail(id, -32601, 'Method not found: subscriptions/listen')
-          : ok(id, { resultType: 'complete', ttlMs: 0, cacheScope: 'private' });
+        if (mode === 'legacy')
+          return fail(id, -32601, 'Method not found: subscriptions/listen');
+        // A real listen stream is never answered: the server acknowledges it
+        // with a notification tagged by the request id and holds it open, as
+        // the 2.1.0 SDK does. silent-listen holds it open and says nothing.
+        return {
+          hold:
+            mode === 'silent-listen'
+              ? []
+              : [
+                  {
+                    jsonrpc: '2.0',
+                    method: 'notifications/subscriptions/acknowledged',
+                    params: {
+                      notifications: request.params?.notifications ?? {},
+                      _meta: { 'io.modelcontextprotocol/subscriptionId': id },
+                    },
+                  },
+                ],
+        };
 
       default:
         return fail(id, -32601, `Method not found: ${method}`);

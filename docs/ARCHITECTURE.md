@@ -503,6 +503,12 @@ on Windows, which CI caught and a local run never would.
 - SSE responses are read frame by frame until one parses as a response carrying
   our id, capped at 512 KB. Resumability was removed in this revision, so there
   are no event ids to track.
+- A request sent with `acknowledgedBy` also ends on a matching acknowledgement
+  notification, on both transports. `subscriptions/listen` needs this: a
+  working server tags `notifications/subscriptions/acknowledged` with the
+  request id and holds the stream open, never sending a response. The
+  exchange records the notification as `acknowledgement` and is answered, not
+  lost, so it does not make the run `INCOMPLETE`.
 - `rawRequest` issues a **non**-JSON-RPC request (used to detect a leftover GET
   stream endpoint) and reads a bounded 2 KB / 1 s preview — deliberately never
   draining, because a legacy SSE endpoint holds the stream open forever.

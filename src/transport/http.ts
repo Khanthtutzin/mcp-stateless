@@ -1,12 +1,14 @@
 import { HTTP_HEADERS, META } from '../protocol.js';
-import type {
-  Exchange,
-  JsonRpcRequest,
-  JsonRpcResponse,
-  MetadataFetch,
-  RawHttpResult,
-  SendOptions,
-  Transport,
+import {
+  acknowledges,
+  type Exchange,
+  type JsonRpcNotification,
+  type JsonRpcRequest,
+  type JsonRpcResponse,
+  type MetadataFetch,
+  type RawHttpResult,
+  type SendOptions,
+  type Transport,
 } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 15_000;
@@ -25,12 +27,14 @@ function headersToObject(headers: Headers): Record<string, string> {
  *
  * 2026-07-28 removed stream resumability, so there are no event ids to track:
  * we read `data:` frames until one parses as a response carrying our id, or
- * the stream ends.
+ * the stream ends. With `acknowledgedBy`, a matching acknowledgement
+ * notification ends the read too — see `SendOptions.acknowledgedBy`.
  */
 export async function readSseResponse(
   body: ReadableStream<Uint8Array>,
   wantedId: string | number,
-): Promise<JsonRpcResponse | null> {
+  acknowledgedBy?: string,
+): Promise<JsonRpcResponse | JsonRpcNotification | null> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
@@ -63,6 +67,9 @@ export async function readSseResponse(
         try {
           const parsed = JSON.parse(data) as JsonRpcResponse;
           if (parsed.id === wantedId) return parsed;
+          if (acknowledgedBy && acknowledges(parsed, acknowledgedBy, wantedId)) {
+            return parsed as unknown as JsonRpcNotification;
+          }
         } catch {
           // Not our frame; keep reading.
         }
@@ -163,13 +170,15 @@ export class HttpTransport implements Transport {
       }
 
       let response: JsonRpcResponse | null = null;
+      let acknowledgement: JsonRpcNotification | undefined;
       let transportError: string | undefined;
 
       if (contentType.includes('text/event-stream') && res.body) {
         try {
-          response = await readSseResponse(res.body, id!);
-          if (!response)
-            transportError = 'SSE stream closed without a matching response.';
+          const message = await readSseResponse(res.body, id!, options.acknowledgedBy);
+          if (message && !('id' in message)) acknowledgement = message;
+          else response = message;
+          if (!message) transportError = 'SSE stream closed without a matching response.';
         } catch (err) {
           transportError = (err as Error).message;
         }
@@ -193,6 +202,7 @@ export class HttpTransport implements Transport {
         status: res.status,
         timingMs: Date.now() - started,
         ...(transportError ? { transportError } : {}),
+        ...(acknowledgement ? { acknowledgement } : {}),
       };
     } catch (err) {
       const message =

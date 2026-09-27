@@ -46,6 +46,37 @@ export interface Exchange {
    * which is a *successful* exchange carrying an error payload.
    */
   transportError?: string;
+  /**
+   * Set when the request was answered by an acknowledgement notification
+   * rather than a response — see `SendOptions.acknowledgedBy`. `response` is
+   * then null, and the exchange is answered, not lost.
+   */
+  acknowledgement?: JsonRpcNotification;
+}
+
+/** A JSON-RPC message with no id, such as a server notification. */
+export interface JsonRpcNotification {
+  jsonrpc: '2.0';
+  method: string;
+  params?: unknown;
+}
+
+/** The `_meta` key a 2026-07-28 server tags subscription traffic with. */
+export const SUBSCRIPTION_ID_META = 'io.modelcontextprotocol/subscriptionId';
+
+/**
+ * True when `message` is the notification `method`, tagged with `id` as its
+ * subscription id — how a long-lived request such as `subscriptions/listen`
+ * says it was accepted without ever sending a response.
+ */
+export function acknowledges(
+  message: unknown,
+  method: string,
+  id: string | number,
+): boolean {
+  if (message === null || typeof message !== 'object') return false;
+  const m = message as { method?: unknown; params?: { _meta?: Record<string, unknown> } };
+  return m.method === method && m.params?._meta?.[SUBSCRIPTION_ID_META] === id;
 }
 
 export interface SendOptions {
@@ -59,6 +90,14 @@ export interface SendOptions {
   omitStandardHeaders?: boolean;
   /** Send as a notification: no id, no response expected. */
   notification?: boolean;
+  /**
+   * A notification method that answers this request as well as a response
+   * would. `subscriptions/listen` is held open for the life of the stream, so
+   * a working server sends `notifications/subscriptions/acknowledged` tagged
+   * with the request's id and never a response. Without this, the probe of a
+   * compliant server would time out and be counted as unanswered.
+   */
+  acknowledgedBy?: string;
 }
 
 /** A raw non-JSON-RPC HTTP probe, used to detect leftover GET endpoints. */

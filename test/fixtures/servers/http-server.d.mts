@@ -11,6 +11,8 @@ export type FixtureMode =
   | 'core-and-ext'
   | 'tasks-ext'
   | 'hidden-tasks'
+  | 'list-changed'
+  | 'silent-listen'
   | 'oauth-no-iss'
   | 'oauth-iss'
   | 'oauth-challenge';
