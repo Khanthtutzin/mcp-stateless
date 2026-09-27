@@ -11,6 +11,12 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+### Documentation
+
+- The README and docs site are titled "MCP Stateless Check", matching the
+  Marketplace listing, which the README and the CI guide now link to. The
+  repository, the npm package and the `mcp-stateless` command are unchanged.
+
 ## [0.3.1] — 2026-09-27
 
 ### Changed

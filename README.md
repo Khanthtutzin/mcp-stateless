@@ -1,6 +1,6 @@
 <div align="center">
 
-# mcp-stateless
+# MCP Stateless Check
 
 **Is your MCP server ready for the 2026-07-28 stateless specification?**
 
@@ -10,6 +10,7 @@
 [![node](https://img.shields.io/badge/node-%3E%3D20-339933?logo=node.js&logoColor=white)](package.json)
 [![provenance](https://img.shields.io/badge/provenance-signed-6f42c1?logo=github)](https://www.npmjs.com/package/mcp-stateless#provenance)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Marketplace](https://img.shields.io/badge/GitHub%20Marketplace-MCP%20Stateless%20Check-2088FF?logo=githubactions&logoColor=white)](https://github.com/marketplace/actions/mcp-stateless-check)
 
 Connects to a running MCP server, probes what it actually does, and tells you
 exactly which of the 2026-07-28 breaking changes it fails — with the wire
@@ -23,6 +24,7 @@ npx mcp-stateless --stdio "node dist/server.js"
 [User guide](docs/user-guide.md) ·
 [Usage](docs/usage.md) ·
 [In CI](docs/ci.md) ·
+[Marketplace](https://github.com/marketplace/actions/mcp-stateless-check) ·
 [Rules](docs/rules/README.md) ·
 [Questions](docs/faq.md)
 
