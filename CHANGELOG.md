@@ -11,6 +11,8 @@ silently start suppressing a different check.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-27
+
 ### Added
 
 - A weekly ecosystem compliance index: a curated, version-pinned cohort probed
@@ -191,7 +193,8 @@ Initial release. Checks a live MCP server against revision
 - Generated per-rule documentation under `docs/rules/`, with a CI check that
   keeps it in step with the rule sources.
 
-[Unreleased]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Khanthtutzin/mcp-stateless/compare/v0.1.5...v0.2.0
 [0.1.5]: https://github.com/Khanthtutzin/mcp-stateless/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Khanthtutzin/mcp-stateless/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Khanthtutzin/mcp-stateless/releases/tag/v0.1.3
