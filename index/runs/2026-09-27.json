@@ -1,7 +1,8 @@
 {
   "schemaVersion": 1,
-  "scannedAt": "2026-09-27T09:10:58.965Z",
+  "scannedAt": "2026-09-27T09:19:17.333Z",
   "toolVersion": "0.2.0",
+  "toolCommit": "52fa9a11690c688f7d0cd34df3332d93ce8c9f55",
   "rulesetSize": 19,
   "results": [
     {
