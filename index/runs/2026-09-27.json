@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "scannedAt": "2026-09-27T08:38:45.886Z",
-  "toolVersion": "0.1.5",
-  "rulesetSize": 18,
+  "scannedAt": "2026-09-27T09:10:58.965Z",
+  "toolVersion": "0.2.0",
+  "rulesetSize": 19,
   "results": [
     {
       "id": "modelcontextprotocol-server-everything",

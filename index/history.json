@@ -25,8 +25,8 @@
     },
     {
       "date": "2026-09-27",
-      "toolVersion": "0.1.5",
-      "rulesetSize": 18,
+      "toolVersion": "0.2.0",
+      "rulesetSize": 19,
       "cohortSize": 4,
       "measured": 4,
       "unreachable": 0,
