@@ -248,7 +248,7 @@ Once a server is ready, the job is to notice the day it stops being ready —
 usually a dependency bump. The composite GitHub Action is one step:
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v0.1.5
+- uses: Khanthtutzin/mcp-stateless@v0.2.0
   with:
     stdio: node dist/server.js
     fail-on: error

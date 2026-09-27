@@ -22,7 +22,7 @@ export const NPM_URL = 'https://www.npmjs.com/package/mcp-stateless';
  * an exact release — and must name the same one, which is why it lives here
  * rather than being retyped into each code sample.
  */
-export const ACTION_REF = 'v0.1.5';
+export const ACTION_REF = 'v0.2.0';
 
 /** Repository-relative files published outside `docs/`, and their slugs. */
 const ROOT_PAGES: Record<string, string> = {

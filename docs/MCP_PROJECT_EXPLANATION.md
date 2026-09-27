@@ -216,7 +216,7 @@ flowchart LR
 Example:
 
 ```yaml
-- uses: Khanthtutzin/mcp-stateless@v0.1.5
+- uses: Khanthtutzin/mcp-stateless@v0.2.0
   with:
     stdio: node dist/server.js
     fail-on: error
