@@ -28,7 +28,9 @@ function extract(source, file) {
     return m[1];
   };
 
-  const jsdoc = source.match(/\/\*\*([\s\S]*?)\*\/\s*export const MCP/);
+  // The body may not contain `*/`, so the match is the comment directly above
+  // the export, not everything from the file's first `/**` down to it.
+  const jsdoc = source.match(/\/\*\*((?:(?!\*\/)[\s\S])*)\*\/\s*export const MCP/);
   if (!jsdoc) throw new Error(`${file}: rule export has no JSDoc rationale`);
 
   return {

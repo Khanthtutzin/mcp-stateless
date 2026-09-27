@@ -2,12 +2,20 @@
 /**
  * Fixture MCP server on stdio.
  *
- * Usage: node stdio-server.mjs <legacy|modern|strict-params>
+ * Usage: node stdio-server.mjs <legacy|modern|strict-params|dual-era|partial-cache|tools-only>
  */
 import { createHandler } from './handlers.mjs';
 
 const mode = process.argv[2] ?? 'modern';
-if (!['legacy', 'modern', 'strict-params', 'dual-era'].includes(mode)) {
+const MODES = [
+  'legacy',
+  'modern',
+  'strict-params',
+  'dual-era',
+  'partial-cache',
+  'tools-only',
+];
+if (!MODES.includes(mode)) {
   process.stderr.write(`Unknown mode: ${mode}\n`);
   process.exit(1);
 }

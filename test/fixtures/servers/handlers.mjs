@@ -10,11 +10,26 @@
  *   modern         a clean 2026-07-28 server
  *   strict-params  modern, but rejects any request carrying params._meta
  *   dual-era       modern, but also still answers the legacy initialize
+ *   partial-cache  modern, but prompts/list and resources/read lack the
+ *                  SEP-2549 cache fields that tools/list carries
+ *   tools-only     modern, with no prompts or resources at all
  */
 
 const TOOLS = [
   { name: 'alpha', description: 'First tool.', inputSchema: { type: 'object' } },
   { name: 'beta', description: 'Second tool.', inputSchema: { type: 'object' } },
+];
+
+const PROMPTS = [{ name: 'greet', description: 'Say hello.' }];
+
+const RESOURCE = {
+  uri: 'fixture://notes/readme',
+  name: 'readme',
+  mimeType: 'text/plain',
+};
+
+const TEMPLATES = [
+  { uriTemplate: 'fixture://notes/{name}', name: 'note', mimeType: 'text/plain' },
 ];
 
 const SERVER_INFO = { name: 'mcp-stateless-fixture', version: '1.0.0' };
@@ -30,6 +45,29 @@ function ok(id, result) {
 
 function fail(id, code, message) {
   return { jsonrpc: '2.0', id, error: { code, message } };
+}
+
+/** The CacheableResult fields (SEP-2549) a modern list or read result carries. */
+function cacheable() {
+  return {
+    ttlMs: 60_000,
+    cacheScope: 'public',
+    _meta: { [META_SERVER_INFO]: SERVER_INFO },
+  };
+}
+
+/** Methods the partial-cache fixture still answers without the SEP-2549 fields. */
+const PARTIAL_CACHE_STALE = new Set(['prompts/list', 'resources/read']);
+
+/**
+ * A prompts or resources result as `mode` would shape it: bare for legacy,
+ * and complete with the cache fields otherwise — except where partial-cache
+ * deliberately leaves them off.
+ */
+function cacheableResult(mode, method, body) {
+  if (mode === 'legacy') return body;
+  const stale = mode === 'partial-cache' && PARTIAL_CACHE_STALE.has(method);
+  return { resultType: 'complete', ...body, ...(stale ? {} : cacheable()) };
 }
 
 function metaVersion(request) {
@@ -96,6 +134,13 @@ export function createHandler(mode) {
       }
     }
 
+    if (
+      mode === 'tools-only' &&
+      (method.startsWith('prompts/') || method.startsWith('resources/'))
+    ) {
+      return fail(id, -32601, `Method not found: ${method}`);
+    }
+
     switch (method) {
       case 'server/discover':
         if (mode === 'legacy')
@@ -106,7 +151,7 @@ export function createHandler(mode) {
         return ok(id, {
           resultType: 'complete',
           supportedVersions: ['2026-07-28'],
-          capabilities: { tools: {}, resources: {} },
+          capabilities: { tools: {}, prompts: {}, resources: {} },
           ttlMs: 3_600_000,
           cacheScope: 'public',
           _meta: { [META_SERVER_INFO]: SERVER_INFO },
@@ -129,10 +174,26 @@ export function createHandler(mode) {
         });
       }
 
-      case 'resources/read':
+      // The other CacheableResult methods. Legacy results predate SEP-2549 and
+      // carry neither ttlMs nor cacheScope — what MCP005 looks for.
+      case 'prompts/list':
+        return ok(id, cacheableResult(mode, method, { prompts: PROMPTS }));
+
+      case 'resources/list':
+        return ok(id, cacheableResult(mode, method, { resources: [RESOURCE] }));
+
+      case 'resources/templates/list':
+        return ok(id, cacheableResult(mode, method, { resourceTemplates: TEMPLATES }));
+
+      case 'resources/read': {
+        if (request.params?.uri === RESOURCE.uri) {
+          const contents = [{ uri: RESOURCE.uri, mimeType: 'text/plain', text: 'hi' }];
+          return ok(id, cacheableResult(mode, method, { contents }));
+        }
         return mode === 'legacy'
           ? fail(id, -32002, 'Resource not found')
           : fail(id, -32602, 'Resource not found');
+      }
 
       case 'ping':
         return mode === 'legacy'
