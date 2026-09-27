@@ -1,11 +1,13 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { planSpawn } from './spawn-plan.js';
-import type {
-  Exchange,
-  JsonRpcRequest,
-  JsonRpcResponse,
-  SendOptions,
-  Transport,
+import {
+  acknowledges,
+  type Exchange,
+  type JsonRpcNotification,
+  type JsonRpcRequest,
+  type JsonRpcResponse,
+  type SendOptions,
+  type Transport,
 } from './types.js';
 
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -82,6 +84,9 @@ export function tokenizeCommand(command: string): string[] {
 interface Pending {
   resolve: (response: JsonRpcResponse) => void;
   timer: NodeJS.Timeout;
+  /** See `SendOptions.acknowledgedBy`. */
+  acknowledgedBy?: string;
+  acknowledge?: (notification: JsonRpcNotification) => void;
 }
 
 /**
@@ -183,6 +188,14 @@ export class StdioTransport implements Transport {
       }
 
       if (parsed.id === undefined || parsed.id === null) {
+        const acked = this.acknowledgedWaiter(parsed);
+        if (acked) {
+          const [id, waiter] = acked;
+          clearTimeout(waiter.timer);
+          this.pending.delete(id);
+          waiter.acknowledge!(parsed as unknown as JsonRpcNotification);
+          continue;
+        }
         this.notes.push(`[notification] ${line.slice(0, 200)}`);
         continue;
       }
@@ -196,6 +209,16 @@ export class StdioTransport implements Transport {
       this.pending.delete(parsed.id);
       waiter.resolve(parsed);
     }
+  }
+
+  /** The pending request this notification acknowledges, if any. */
+  private acknowledgedWaiter(message: unknown): [string | number, Pending] | undefined {
+    for (const [id, waiter] of this.pending) {
+      if (waiter.acknowledgedBy && acknowledges(message, waiter.acknowledgedBy, id)) {
+        return [id, waiter];
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -261,10 +284,11 @@ export class StdioTransport implements Transport {
     else wire.id = id;
 
     const sent: Exchange['request'] = wire;
+    let acknowledgement: JsonRpcNotification | undefined;
 
     const responsePromise: Promise<JsonRpcResponse | null> = options.notification
       ? Promise.resolve(null)
-      : new Promise<JsonRpcResponse>((resolve) => {
+      : new Promise<JsonRpcResponse | null>((resolve) => {
           const timer = setTimeout(() => {
             this.pending.delete(id!);
             resolve({
@@ -276,7 +300,19 @@ export class StdioTransport implements Transport {
               },
             });
           }, options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-          this.pending.set(id!, { resolve, timer });
+          this.pending.set(id!, {
+            resolve,
+            timer,
+            ...(options.acknowledgedBy
+              ? {
+                  acknowledgedBy: options.acknowledgedBy,
+                  acknowledge: (notification: JsonRpcNotification) => {
+                    acknowledgement = notification;
+                    resolve(null);
+                  },
+                }
+              : {}),
+          });
         });
 
     try {
@@ -304,6 +340,10 @@ export class StdioTransport implements Transport {
         timingMs,
         transportError: response.error.message.slice('__transport__:'.length),
       };
+    }
+
+    if (acknowledgement) {
+      return { ...base, request: sent, response: null, timingMs, acknowledgement };
     }
 
     return { ...base, request: sent, response, timingMs };

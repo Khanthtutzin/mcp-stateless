@@ -200,6 +200,15 @@ export async function startHttpFixture(mode) {
       return;
     }
 
+    // A held request, such as subscriptions/listen: an event stream carrying
+    // the notifications, left open until the client goes away.
+    if (response.hold) {
+      res.writeHead(200, { ...headers, 'content-type': 'text/event-stream' });
+      for (const message of response.hold)
+        res.write(`data: ${JSON.stringify(message)}\n\n`);
+      return;
+    }
+
     res.writeHead(200, headers);
     res.end(JSON.stringify(response));
   });

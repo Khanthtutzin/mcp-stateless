@@ -225,3 +225,22 @@ describe('MCP021 — tasks moved to the io.modelcontextprotocol/tasks extension'
     expect(mcp021(await checkStdio('dual-era', { only: ['MCP021'] }))).toEqual([]);
   });
 });
+
+describe('subscriptions/listen is a held stream, not a request/response', () => {
+  it('certifies a server that acknowledges the stream and holds it open', async () => {
+    // Regression: the 2.1.0 SDK answers subscriptions/listen with
+    // notifications/subscriptions/acknowledged and never a response. That
+    // timed out, and a timeout makes a run incomplete — so a correctly
+    // migrated server advertising listChanged could never be READY.
+    const report = await checkStdio('list-changed');
+    expect(report.incomplete).toBeUndefined();
+    expect(report.findings).toEqual([]);
+    expect(report.ready).toBe(true);
+  });
+
+  it('still calls total silence unanswered', async () => {
+    const report = await checkStdio('silent-listen');
+    expect(report.ready).toBe(false);
+    expect(report.incomplete?.failed).toBe(1);
+  });
+});

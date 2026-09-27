@@ -31,13 +31,16 @@ export const MCP009: Rule = {
     const advertised = LIST_CHANGED_CAPS.filter((key) => caps[key]?.listChanged === true);
     if (advertised.length === 0) return [];
 
-    // A working implementation holds the stream open, so a timeout here is a
-    // pass, not a failure. Only an explicit method-not-found is conclusive.
+    // A working implementation holds the stream open and never sends a
+    // response: it answers with notifications/subscriptions/acknowledged,
+    // tagged with our request id, and the transport resolves on that. Only an
+    // explicit method-not-found is a finding. Silence is neither a pass nor a
+    // finding — it is an unanswered probe, and makes the run incomplete.
     const ex = await ctx.call(
       'subscriptions/listen',
       // Field name and shape per SubscriptionFilter in the 2026-07-28 schema.
       { notifications: { toolsListChanged: true } },
-      { timeoutMs: 2500 },
+      { timeoutMs: 2500, acknowledgedBy: 'notifications/subscriptions/acknowledged' },
     );
 
     if (!isMethodNotFound(ex)) return [];
