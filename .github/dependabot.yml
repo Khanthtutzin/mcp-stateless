@@ -12,6 +12,15 @@ updates:
       dev-dependencies:
         patterns: ['*']
         update-types: [minor, patch]
+    ignore:
+      # engines is >=20. Each @types/node major types APIs that older Node
+      # users do not have, so a major bump is a deliberate decision, not a PR.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      # TypeScript 7 is blocked on typescript-eslint's peer range. Remove this
+      # once typescript-eslint supports it, and bump the two together.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
     commit-message:
       prefix: chore
 

@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>mcp-stateless — demo</title>
+    <style>
+      :root {
+        --bg: #0b0e14;
+        --panel: #111722;
+        --panel2: #171e2b;
+        --border: #283143;
+        --text: #edf2ff;
+        --muted: #8b96ad;
+        --blue: #7aa2f7;
+        --green: #9ece6a;
+        --red: #f7768e;
+        --amber: #e0af68;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+          Inter,
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        padding: 28px;
+      }
+      .deck {
+        width: min(1120px, 100%);
+      }
+      .slide {
+        display: none;
+        min-height: min(720px, calc(100vh - 56px));
+        padding: 56px;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        background:
+          radial-gradient(
+            circle at top right,
+            rgba(122, 162, 247, 0.09),
+            transparent 32%
+          ),
+          var(--panel);
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.32);
+      }
+      .slide.active {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 28px;
+      }
+      .label {
+        color: var(--blue);
+        font:
+          600 13px/1.2 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.16em;
+      }
+      h1,
+      h2 {
+        margin: 0;
+        letter-spacing: -0.035em;
+        line-height: 1.02;
+      }
+      h1 {
+        font-size: clamp(44px, 7vw, 78px);
+        max-width: 900px;
+      }
+      h2 {
+        font-size: clamp(34px, 5vw, 58px);
+        max-width: 900px;
+      }
+      .lead {
+        max-width: 760px;
+        margin: 0;
+        color: var(--muted);
+        font-size: clamp(19px, 2vw, 26px);
+        line-height: 1.45;
+      }
+      .lead strong {
+        color: var(--text);
+      }
+      .diagram {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr auto 1fr;
+        align-items: center;
+        gap: 14px;
+      }
+      .box {
+        padding: 24px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--panel2);
+        text-align: center;
+      }
+      .box b {
+        display: block;
+        font-size: 20px;
+        margin-bottom: 6px;
+      }
+      .box span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+      .arrow {
+        color: var(--blue);
+        font-size: 28px;
+      }
+      .command {
+        padding: 20px 22px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #0a0d13;
+        color: #d7def3;
+        font:
+          500 16px/1.5 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        overflow-x: auto;
+        white-space: nowrap;
+      }
+      .checks {
+        display: grid;
+        gap: 12px;
+        max-width: 850px;
+      }
+      .check {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        gap: 12px;
+        align-items: center;
+        padding: 15px 16px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--panel2);
+      }
+      .check .num {
+        color: var(--blue);
+        font:
+          700 14px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      .check span {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .terminal {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #090c11;
+      }
+      .terminal-bar {
+        padding: 10px 14px;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted);
+        font:
+          12px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      pre {
+        margin: 0;
+        padding: 24px;
+        overflow-x: auto;
+        color: #dce3f7;
+        font:
+          500 15px/1.65 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      .bad {
+        color: var(--red);
+      }
+      .good {
+        color: var(--green);
+      }
+      .warn {
+        color: var(--amber);
+      }
+      .blue {
+        color: var(--blue);
+      }
+      .muted {
+        color: var(--muted);
+      }
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+      .result {
+        padding: 22px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: var(--panel2);
+      }
+      .result .state {
+        font:
+          700 26px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        margin-bottom: 8px;
+      }
+      .result p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .owner {
+        display: inline-block;
+        margin-top: 14px;
+        padding: 6px 9px;
+        border-radius: 7px;
+        background: rgba(122, 162, 247, 0.1);
+        color: var(--blue);
+        font:
+          600 12px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      .footer {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 18px;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .footer-inner {
+        width: min(1120px, calc(100% - 56px));
+        display: flex;
+        justify-content: space-between;
+        color: var(--muted);
+        font:
+          12px ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+      }
+      @media (max-width: 800px) {
+        body {
+          padding: 14px;
+        }
+        .slide {
+          padding: 32px 24px;
+          min-height: calc(100vh - 28px);
+        }
+        .diagram {
+          grid-template-columns: 1fr;
+        }
+        .arrow {
+          transform: rotate(90deg);
+          justify-self: center;
+        }
+        .two-col {
+          grid-template-columns: 1fr;
+        }
+        .footer {
+          bottom: 8px;
+        }
+        .footer-inner {
+          width: calc(100% - 28px);
+        }
+      }
+
+      /* ── responsive fixes ─────────────────────────────────────────────────────── */
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      /* centring a box taller than the viewport puts its top out of reach, because scrolling cannot go negative. `safe` falls back to plain centring where unsupported. */
+      body {
+        align-items: safe center;
+      }
+      /* mobile browser chrome is included in 100vh, so a slide sized to it gets cut off */
+      @supports (height: 100dvh) {
+        .slide {
+          min-height: min(720px, calc(100dvh - 56px));
+        }
+      }
+      @supports (height: 100dvh) {
+        @media (max-width: 800px) {
+          .slide {
+            min-height: calc(100dvh - 28px);
+          }
+        }
+      }
+      /* wide code must scroll inside its own box, never widen the page */
+      .slide.active > * {
+        min-width: 0;
+      }
+      .terminal,
+      .command,
+      .diagram,
+      .checks,
+      .two-col,
+      pre {
+        max-width: 100%;
+      }
+      /* .check is a 44px + 1fr grid holding three items, so the description wrapped onto row 2 and landed in the 44px track */
+      .check span {
+        grid-column: 2;
+      }
+      /* long unbroken tokens (URLs, method names) wrap instead of overflowing */
+      h1,
+      h2,
+      .lead,
+      .box span,
+      .check span,
+      .result p {
+        overflow-wrap: break-word;
+      }
+
+      /* small laptops and tablets: 56px padding and a five-column diagram are already too tight well above the 800px breakpoint */
+      @media (min-width: 801px) and (max-width: 1024px) {
+        .slide {
+          padding: 44px 36px;
+        }
+        h1 {
+          font-size: clamp(40px, 6.4vw, 64px);
+        }
+        h2 {
+          font-size: clamp(30px, 4.6vw, 48px);
+        }
+        .lead {
+          font-size: clamp(18px, 1.9vw, 22px);
+        }
+        pre {
+          padding: 20px;
+          font-size: 14px;
+        }
+        .box {
+          padding: 18px;
+        }
+        .diagram {
+          gap: 10px;
+        }
+      }
+      @media (min-width: 801px) and (max-width: 940px) {
+        .diagram {
+          grid-template-columns: 1fr;
+        }
+        .arrow {
+          transform: rotate(90deg);
+          justify-self: center;
+        }
+      }
+
+      /* short viewports — landscape phones, small laptops, a projector at 720p: stop reserving 720px of height and keep content clear of the fixed footer */
+      @media (max-height: 640px) {
+        .slide {
+          min-height: 0;
+          padding: 28px 32px 62px;
+        }
+        .slide.active {
+          justify-content: flex-start;
+          gap: 18px;
+        }
+        h1 {
+          font-size: clamp(32px, 5.2vw, 44px);
+        }
+        h2 {
+          font-size: clamp(26px, 4.2vw, 36px);
+        }
+        .lead {
+          font-size: 18px;
+        }
+        pre {
+          font-size: 13px;
+          padding: 16px;
+        }
+        .command {
+          font-size: 14px;
+        }
+      }
+
+      /* phones */
+      @media (max-width: 560px) {
+        .slide {
+          padding: 26px 18px 62px;
+        }
+        .slide.active {
+          gap: 20px;
+        }
+        h1 {
+          font-size: clamp(30px, 8.4vw, 40px);
+        }
+        h2 {
+          font-size: clamp(25px, 7.2vw, 34px);
+        }
+        .lead {
+          font-size: 17px;
+        }
+        .label {
+          font-size: 11px;
+        }
+        .command {
+          font-size: 13px;
+          padding: 16px;
+        }
+        pre {
+          font-size: 12.5px;
+          padding: 16px;
+        }
+        .terminal-bar {
+          font-size: 11px;
+        }
+        .check {
+          grid-template-columns: 32px 1fr;
+          padding: 13px;
+        }
+        .box b {
+          font-size: 18px;
+        }
+        .result .state {
+          font-size: 22px;
+        }
+        .footer-inner span + span {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck">
+      <section class="slide active">
+        <div class="label">mcp-stateless · demo</div>
+        <h1>Is your MCP server actually ready?</h1>
+        <p class="lead">
+          <strong>mcp-stateless checks the server you are actually running</strong>
+          against the MCP <code>2026-07-28</code> stateless specification.
+        </p>
+        <div class="command">$ npx mcp-stateless --stdio "node dist/server.js"</div>
+      </section>
+      <section class="slide">
+        <div class="label">01 · the idea</div>
+        <h2>It tests the server, not the source code.</h2>
+        <div class="diagram">
+          <div class="box"><b>Your MCP server</b><span>Real runtime behaviour</span></div>
+          <div class="arrow">→</div>
+          <div class="box"><b>mcp-stateless</b><span>Probe + evaluate</span></div>
+          <div class="arrow">→</div>
+          <div class="box"><b>Verdict</b><span>Ready / findings</span></div>
+        </div>
+        <p class="lead">
+          A version number or successful build is not enough. The checker communicates
+          with the running server and uses the responses as evidence.
+        </p>
+      </section>
+      <section class="slide">
+        <div class="label">02 · how it checks</div>
+        <h2>One small, controlled conversation.</h2>
+        <div class="checks">
+          <div class="check">
+            <div class="num">01</div>
+            <b>Discover</b
+            ><span>Ask <code>server/discover</code> what the server supports.</span>
+          </div>
+          <div class="check">
+            <div class="num">02</div>
+            <b>Probe</b
+            ><span
+              >Check protocol behaviour such as listings, headers and the old
+              handshake.</span
+            >
+          </div>
+          <div class="check">
+            <div class="num">03</div>
+            <b>Observe</b
+            ><span>Record the actual responses, headers and error codes.</span>
+          </div>
+          <div class="check">
+            <div class="num">04</div>
+            <b>Evaluate</b><span>Run the 18 rules against the shared probe results.</span>
+          </div>
+          <div class="check">
+            <div class="num">05</div>
+            <b>Explain</b
+            ><span>Show what was found, what was expected and who needs to fix it.</span>
+          </div>
+        </div>
+      </section>
+      <section class="slide">
+        <div class="label">03 · demo</div>
+        <h2>Old server → clear evidence.</h2>
+        <div class="terminal">
+          <div class="terminal-bar">stdio · example output</div>
+          <pre><span class="blue">$ npx mcp-stateless --stdio "node dist/server.js"</span>
+
+<span class="bad">Breaking (7)</span>
+
+<span class="bad">× MCP001</span>  server/discover is not implemented <span class="muted">(SDK)</span>
+    found     JSON-RPC error -32601: Method not found.
+    expected  server/discover must be implemented.
+    fix       Upgrade to an SDK release targeting 2026-07-28.
+
+<span class="bad">× MCP006</span>  Removed ping method is still implemented <span class="muted">(SDK)</span>
+
+<span class="bad">NOT READY</span> — 7 breaking issues</pre>
+        </div>
+      </section>
+      <section class="slide">
+        <div class="label">04 · the useful part</div>
+        <h2>It tells you who owns the fix.</h2>
+        <div class="two-col">
+          <div class="result">
+            <div class="state" style="color: var(--amber)">SDK</div>
+            <p>
+              Protocol plumbing supplied by the MCP SDK. Often fixed by upgrading the
+              dependency.
+            </p>
+            <span class="owner">LESS CODE TO CHANGE</span>
+          </div>
+          <div class="result">
+            <div class="state" style="color: var(--green)">YOUR CODE</div>
+            <p>
+              Behaviour your application actually controls. The report points to the
+              concrete change.
+            </p>
+            <span class="owner">ACTIONABLE FINDING</span>
+          </div>
+        </div>
+        <p class="lead">Seven findings do not necessarily mean seven code changes.</p>
+      </section>
+      <section class="slide">
+        <div class="label">05 · confidence</div>
+        <h2>When it cannot measure, it does not guess.</h2>
+        <div class="terminal">
+          <div class="terminal-bar">unreachable server</div>
+          <pre><span class="warn">UNREACHABLE</span> — Server process exited before responding.
+
+<span class="good">No checks were run.</span>
+Nothing here is a verdict on conformance.</pre>
+        </div>
+        <p class="lead">
+          No invented failures. No fake “ready”. The tool reports only what it actually
+          observed.
+        </p>
+      </section>
+      <section class="slide">
+        <div class="label">06 · try it</div>
+        <h2>Point it at a server you own.</h2>
+        <div class="command">$ npx mcp-stateless --stdio "node dist/server.js"</div>
+        <div class="command">$ npx mcp-stateless --http https://api.example.com/mcp</div>
+        <p class="lead">
+          It supports CLI, library use and GitHub Actions. It never calls your MCP tools
+          and has no telemetry.
+        </p>
+      </section>
+    </main>
+    <div class="footer">
+      <div class="footer-inner">
+        <span id="counter">01 / 07</span><span>← → move · Home / End</span>
+      </div>
+    </div>
+    <script>
+      (() => {
+        const slides = [...document.querySelectorAll('.slide')],
+          counter = document.getElementById('counter');
+        let i = 0;
+        const pad = (n) => String(n).padStart(2, '0');
+        function show(n) {
+          i = Math.max(0, Math.min(slides.length - 1, n));
+          slides.forEach((s, k) => s.classList.toggle('active', k === i));
+          counter.textContent = `${pad(i + 1)} / ${pad(slides.length)}`;
+        }
+        document.addEventListener('keydown', (e) => {
+          if (['ArrowRight', 'PageDown', ' ', 'Enter'].includes(e.key)) {
+            e.preventDefault();
+            show(i + 1);
+          } else if (['ArrowLeft', 'PageUp', 'Backspace'].includes(e.key)) {
+            e.preventDefault();
+            show(i - 1);
+          } else if (e.key === 'Home') show(0);
+          else if (e.key === 'End') show(slides.length - 1);
+        });
+        show(0);
+      })();
+    </script>
+  </body>
+</html>

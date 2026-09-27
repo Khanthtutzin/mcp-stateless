@@ -111,6 +111,17 @@ describe('the commit job holds a write credential, so it runs no target code', (
     expect(commit).toMatch(/--runs-dir/);
   });
 
+  it('pushes to index-data, never to main', () => {
+    // main's ruleset requires a pull request and CI, so a bot push there is
+    // rejected (GH013) and the week's scan is silently lost. The main checkout
+    // keeps no credentials; the push happens from the index-data checkout.
+    expect(commit).toMatch(/ref:\s*index-data/);
+    expect(commit).toMatch(/persist-credentials:\s*false/);
+    expect(commit).toMatch(/working-directory:\s*data/);
+    expect(commit).toMatch(/--history data\/index\/history\.json/);
+    expect(commit).toMatch(/--runs-dir data\/index\/runs/);
+  });
+
   it('checks for untracked files before deciding there is nothing to commit', () => {
     // `git diff --quiet index/` ignores the new, untracked run file.
     expect(commit).toMatch(/git status --porcelain/);

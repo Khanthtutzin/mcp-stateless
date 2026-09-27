@@ -251,10 +251,12 @@ site/                  Astro + Starlight website — its own package, own lockfi
   src/loaders/         reads docs/ in place; no copy of the documentation exists
   src/docs-manifest.ts the one map from repository path to site route
   src/pages/index.astro  the landing page
-index/                 the compliance index — committed data, not build output
+index/                 the compliance index cohort
   targets.json         the curated cohort, every version pinned by a reviewer
-  runs/<date>.json     one snapshot per weekly scan: verdicts only, no evidence
-  history.json         append-only trend, one row per scan date
+                       (results live on the index-data branch, under index/:
+                        runs/<date>.json — one snapshot per weekly scan,
+                        verdicts only, no evidence — and history.json, the
+                        append-only trend, one row per scan date)
 docs/
   ARCHITECTURE.md      this file
   usage.md             the CLI reference
@@ -668,7 +670,11 @@ rather than cancelling them so `main` always wins. Same OIDC mechanism as
 publishing.
 
 **[index.yml](../.github/workflows/index.yml)** — probes the curated cohort in
-`index/targets.json` every Monday and commits the result.
+`index/targets.json` every Monday and commits the result to the **`index-data`
+branch**, not `main`. `main`'s ruleset requires a pull request and CI, which a
+bot push can never satisfy, and weakening that ruleset for one workflow would
+open it to every workflow holding `contents: write`. The data branch's git log
+is the audit trail.
 
 It is **two jobs on purpose**, and the split is the whole security argument. The
 `scan` job executes third-party code — every server in the cohort, downloaded
