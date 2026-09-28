@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "scannedAt": "2026-09-28T12:05:51.774Z",
+  "toolVersion": "0.3.1",
+  "toolCommit": "7d2d896e4bd858e72920f796c117942e6348e896",
+  "rulesetSize": 21,
+  "results": [
+    {
+      "id": "modelcontextprotocol-server-everything",
+      "package": "@modelcontextprotocol/server-everything",
+      "version": "2026.8.18",
+      "transport": "stdio",
+      "ready": false,
+      "errorCount": 11,
+      "warningCount": 3,
+      "sdkErrors": 11,
+      "applicationErrors": 0,
+      "failedRules": [
+        "MCP001",
+        "MCP002",
+        "MCP004",
+        "MCP005",
+        "MCP006",
+        "MCP007",
+        "MCP008",
+        "MCP009",
+        "MCP021"
+      ],
+      "unreachable": null
+    },
+    {
+      "id": "modelcontextprotocol-server-memory",
+      "package": "@modelcontextprotocol/server-memory",
+      "version": "2026.7.4",
+      "transport": "stdio",
+      "ready": false,
+      "errorCount": 9,
+      "warningCount": 1,
+      "sdkErrors": 9,
+      "applicationErrors": 0,
+      "failedRules": [
+        "MCP001",
+        "MCP002",
+        "MCP004",
+        "MCP005",
+        "MCP006",
+        "MCP008",
+        "MCP009"
+      ],
+      "unreachable": null
+    },
+    {
+      "id": "modelcontextprotocol-server-filesystem",
+      "package": "@modelcontextprotocol/server-filesystem",
+      "version": "2026.7.10",
+      "transport": "stdio",
+      "ready": false,
+      "errorCount": 7,
+      "warningCount": 1,
+      "sdkErrors": 7,
+      "applicationErrors": 0,
+      "failedRules": [
+        "MCP001",
+        "MCP002",
+        "MCP004",
+        "MCP005",
+        "MCP006",
+        "MCP009"
+      ],
+      "unreachable": null
+    },
+    {
+      "id": "modelcontextprotocol-server-sequential-thinking",
+      "package": "@modelcontextprotocol/server-sequential-thinking",
+      "version": "2026.7.4",
+      "transport": "stdio",
+      "ready": false,
+      "errorCount": 7,
+      "warningCount": 1,
+      "sdkErrors": 7,
+      "applicationErrors": 0,
+      "failedRules": [
+        "MCP001",
+        "MCP002",
+        "MCP004",
+        "MCP005",
+        "MCP006",
+        "MCP009"
+      ],
+      "unreachable": null
+    }
+  ]
+}

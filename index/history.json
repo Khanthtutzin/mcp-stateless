@@ -45,6 +45,30 @@
         "MCP008": 2,
         "MCP009": 4
       }
+    },
+    {
+      "date": "2026-09-28",
+      "toolVersion": "0.3.1",
+      "toolCommit": "7d2d896e4bd858e72920f796c117942e6348e896",
+      "rulesetSize": 21,
+      "cohortSize": 4,
+      "measured": 4,
+      "unreachable": 0,
+      "ready": 0,
+      "medianErrors": 8,
+      "sdkErrors": 34,
+      "applicationErrors": 0,
+      "ruleFailureCounts": {
+        "MCP001": 4,
+        "MCP002": 4,
+        "MCP004": 4,
+        "MCP005": 4,
+        "MCP006": 4,
+        "MCP007": 1,
+        "MCP008": 2,
+        "MCP009": 4,
+        "MCP021": 1
+      }
     }
   ]
 }
